@@ -6,6 +6,7 @@ node_modules/
 
 # Local runtime data and credentials
 data/
+config/app-config.json
 *.db
 *.sqlite
 *.sqlite3
@@ -22,3 +23,4 @@ data/
 # Logs and temporary files
 *.log
 tmp/
+docs/audits/

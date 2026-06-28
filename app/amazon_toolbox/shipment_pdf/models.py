@@ -7,6 +7,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class FilenameShipmentInfo:
     factory_name: str = ""
+    logistics_code: str = ""
     sku: str = ""
     product_name: str = ""
     country: str = ""
@@ -19,6 +20,7 @@ class FilenameShipmentInfo:
     def as_dict(self) -> dict:
         return {
             "factory_name": self.factory_name,
+            "logistics_code": self.logistics_code,
             "sku": self.sku,
             "product_name": self.product_name,
             "country": self.country,
@@ -44,6 +46,9 @@ class ShipmentRecord:
     is_single_sku: bool
     quantity_per_box: int | None = None
     total_units: int | None = None
+    label_type: str = "amazon"
+    logistics_code: str = ""
+    shipment_total_boxes: int | None = None
     label_title: str = ""
     title_product_name: str = ""
     created_at: str = ""
@@ -70,6 +75,9 @@ class ShipmentRecord:
             "box_count": self.box_count,
             "quantity_per_box": self.quantity_per_box,
             "total_units": self.total_units,
+            "label_type": self.label_type,
+            "logistics_code": self.logistics_code,
+            "shipment_total_boxes": self.shipment_total_boxes,
             "label_title": self.label_title,
             "title_product_name": self.title_product_name,
             "created_at": self.created_at,

@@ -4,22 +4,22 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Amazon Operations Toolbox</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260621-shipment-package" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260628-transaction-csv" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen hidden" aria-label="登录">
-      <form id="loginForm" class="login-panel">
+      <form id="loginForm" class="login-panel" autocomplete="off">
         <div class="brand-mark">A</div>
         <div>
           <p class="kicker">AMAZON TOOLBOX</p>
           <h1>登录经营工具箱</h1>
         </div>
         <label for="loginUsername">用户名</label>
-        <input id="loginUsername" type="text" autocomplete="username" placeholder="admin" />
+        <input id="loginUsername" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="请输入用户名" />
         <label for="loginPassword">密码</label>
-        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="admin123" />
+        <input id="loginPassword" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="请输入密码" />
         <button class="button accent" type="submit">登录</button>
-        <p id="loginStatus" class="status-text">首次启动默认管理员：admin / admin123</p>
+        <p id="loginStatus" class="status-text">请输入管理员分配的账号和密码</p>
       </form>
     </section>
 
@@ -44,22 +44,29 @@
         </div>
         <button id="logoutButton" class="button secondary" type="button">退出</button>
       </div>
+      <nav class="mobile-workflow-nav" aria-label="移动端模块导航">
+        <button class="nav-item active" type="button" data-view="shipment">货件PDF</button>
+        <button class="nav-item" type="button" data-view="report">交易报告</button>
+        <button class="nav-item" type="button" data-view="transaction">交易明细</button>
+        <button class="nav-item" type="button" data-view="history">历史</button>
+        <button class="nav-item" type="button" data-view="settings">设置</button>
+      </nav>
     </header>
 
     <div class="shell hidden" id="appShell">
       <aside class="sidebar" aria-label="模块导航">
         <div class="brand">
-          <span class="section-label">WORKFLOWS</span>
+          <span class="section-label">模块</span>
         </div>
         <nav class="nav">
           <button class="nav-item active" type="button" data-view="shipment">货件PDF处理</button>
           <button class="nav-item" type="button" data-view="report">交易报告PDF</button>
-          <button class="nav-item" type="button" disabled>交易明细CSV</button>
+          <button class="nav-item" type="button" data-view="transaction">交易明细CSV</button>
           <button class="nav-item" type="button" data-view="history">历史任务</button>
           <button class="nav-item" type="button" data-view="settings">设置</button>
         </nav>
         <div class="sidebar-note">
-          <span class="section-label">STATUS</span>
+          <span class="section-label">状态</span>
           <strong>Alpha</strong>
         </div>
       </aside>
@@ -68,7 +75,7 @@
         <section id="shipmentView" class="view-panel" data-view-panel="shipment">
           <header class="topbar">
             <div>
-              <p class="kicker">SHIPMENT PDFS</p>
+              <p class="kicker">货件 PDF</p>
               <h1>外箱标识别与规范命名</h1>
             </div>
             <div class="topbar-actions">
@@ -79,12 +86,17 @@
 
           <section class="input-band" aria-label="批次导入">
             <form id="uploadForm" class="dropzone">
-              <input id="fileInput" name="files" type="file" accept="application/pdf" multiple />
-              <div>
-                <strong>上传一批货件 PDF</strong>
-                <span>PDF · Multiple files</span>
+              <input id="fileInput" class="visually-hidden" name="files" type="file" accept="application/pdf,.pdf" multiple />
+              <input id="folderUploadInput" class="visually-hidden" name="folderFiles" type="file" multiple webkitdirectory directory />
+              <div id="dropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择货件 PDF">
+                <strong>拖放货件 PDF 或文件夹</strong>
+                <span id="uploadSelectionText">支持一批 PDF 文件，也支持把一个文件夹直接拖进来</span>
               </div>
-              <button class="button accent" type="submit">上传并识别</button>
+              <div class="dropzone-actions">
+                <button class="button secondary compact" type="button" data-upload-picker="files">选择PDF</button>
+                <button class="button secondary compact" type="button" data-upload-picker="folder">选择文件夹</button>
+                <button class="button accent" type="submit">上传并识别</button>
+              </div>
             </form>
 
             <form id="folderForm" class="folder-form">
@@ -96,28 +108,66 @@
             </form>
           </section>
 
+          <section id="shipmentLogPanel" class="log-panel" aria-label="批次处理日志">
+            <div class="log-panel-header">
+              <h2>处理日志</h2>
+              <span>上传、预处理、扫描进度</span>
+            </div>
+            <ol id="shipmentLogList" class="log-list" aria-live="polite">
+              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+            </ol>
+          </section>
+
           <section class="table-panel">
             <div class="panel-header">
               <div>
                 <h2>识别结果</h2>
                 <p id="batchLabel">尚未扫描批次</p>
               </div>
-              <div id="statusText" class="status-text">等待导入</div>
+              <div id="statusText" class="status-text" role="status" aria-live="polite">等待导入</div>
             </div>
+            <div class="table-tools" aria-label="结果筛选">
+              <label class="filter-control wide" for="shipmentSearchInput">
+                <span>搜索</span>
+                <input id="shipmentSearchInput" type="search" placeholder="文件名、工厂、SKU、产品名、FBA" />
+              </label>
+              <label class="filter-control" for="shipmentStatusFilter">
+                <span>状态</span>
+                <select id="shipmentStatusFilter">
+                  <option value="all">全部</option>
+                  <option value="valid">通过</option>
+                  <option value="review">需复核</option>
+                </select>
+              </label>
+              <label class="filter-control" for="shipmentCountryFilter">
+                <span>国家</span>
+                <select id="shipmentCountryFilter">
+                  <option value="all">全部</option>
+                </select>
+              </label>
+              <label class="filter-control" for="shipmentWarehouseFilter">
+                <span>仓库</span>
+                <select id="shipmentWarehouseFilter">
+                  <option value="all">全部</option>
+                </select>
+              </label>
+              <button id="clearShipmentFilters" class="button secondary compact" type="button" disabled>清空筛选</button>
+            </div>
+            <div id="shipmentFilterSummary" class="filter-summary" hidden></div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>原文件名</th>
-                    <th>工厂</th>
-                    <th>SKU</th>
-                    <th>产品名</th>
-                    <th>国家</th>
-                    <th>仓库</th>
-                    <th>FBA编码</th>
-                    <th>箱/件</th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="original_filename">原文件名</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="factory_name">工厂</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="sku">SKU</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="product_name">产品名</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="destination_country">国家</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="warehouse">仓库</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="fba_code">FBA编码</button></th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="total_units">箱/件</button></th>
                     <th>文件名信息</th>
-                    <th>状态</th>
+                    <th><button class="sort-button column-menu-button" type="button" data-column-field="is_valid">状态</button></th>
                     <th>建议文件名</th>
                     <th>操作</th>
                   </tr>
@@ -136,7 +186,7 @@
         <section id="reportView" class="view-panel hidden" data-view-panel="report">
           <header class="topbar">
             <div>
-              <p class="kicker">TRANSACTION REPORT PDFS</p>
+              <p class="kicker">交易报告 PDF</p>
               <h1>交易报告 PDF 提取与核验</h1>
             </div>
             <div class="topbar-actions">
@@ -152,6 +202,28 @@
                 <button class="button accent" type="submit">提取并生成 Excel</button>
               </div>
             </form>
+          </section>
+
+          <section class="task-brief compact" aria-label="交易报告任务说明">
+            <div class="task-brief-main">
+              <p class="section-label">任务说明</p>
+              <h2>交易报告 PDF 提取</h2>
+              <p>用于批量处理 Amazon 后台下载的交易报告 PDF，提取报告期、店铺、站点、货币、摘要与明细行，并生成便于复核的 Excel 工作簿。</p>
+            </div>
+            <div class="task-brief-list">
+              <div>
+                <strong>文件要求</strong>
+                <span>建议使用 Amazon 原始 PDF；文件夹内可包含多站点、多月份报告。</span>
+              </div>
+              <div>
+                <strong>核验重点</strong>
+                <span>报告期、币种、明细行数与异常项会统一展示，便于人工复核。</span>
+              </div>
+              <div>
+                <strong>输出内容</strong>
+                <span>生成带摘要、明细和审计信息的 Excel 文件。</span>
+              </div>
+            </div>
           </section>
 
           <section class="report-metrics" aria-label="交易报告概览">
@@ -205,10 +277,105 @@
           </section>
         </section>
 
+        <section id="transactionView" class="view-panel hidden" data-view-panel="transaction">
+          <header class="topbar">
+            <div>
+              <p class="kicker">交易明细 CSV</p>
+              <h1>交易明细 CSV 清洗合并</h1>
+            </div>
+            <div class="topbar-actions">
+              <a id="transactionDownload" class="button secondary disabled" href="#">下载总表</a>
+              <a id="transactionAuditDownload" class="button secondary disabled" href="#">下载审计</a>
+            </div>
+          </header>
+
+          <section class="input-band single" aria-label="交易明细导入">
+            <form id="transactionFolderForm" class="folder-form wide">
+              <label for="transactionFolderInput">服务器文件夹路径</label>
+              <div class="inline-control">
+                <input id="transactionFolderInput" type="text" value="/Users/xukeqiang/Documents/Amazon_Data_Process/202605payment" />
+                <button class="button accent" type="submit">清洗并生成 Excel</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="task-brief" aria-label="交易明细任务说明">
+            <div class="task-brief-main">
+              <p class="section-label">任务说明</p>
+              <h2>交易明细 CSV 清洗</h2>
+              <p>用于批量处理从 Amazon 后台下载的交易明细、付款明细类 CSV/XLSX 文件，系统会自动识别表头、站点国家、品牌线索、日期与金额字段，清洗合并后生成可复核的 Excel 总表和审计记录。</p>
+            </div>
+            <div class="task-brief-list">
+              <div>
+                <strong>文件要求</strong>
+                <span>支持文件夹内混放 .csv 与 .xlsx；建议保留 Amazon 原始导出文件，不要放入已经清洗过的结果表。</span>
+              </div>
+              <div>
+                <strong>命名要求</strong>
+                <span>文件名或上级文件夹最好包含站点/国家信息；无法判断国家、日期或金额时会进入异常提示。</span>
+              </div>
+              <div>
+                <strong>输出内容</strong>
+                <span>生成交易明细总表与审计文件；不支持的格式、空文件、字段缺失会在页面和审计表中标记。</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-metrics" aria-label="交易明细概览">
+            <div class="metric compact">
+              <span>源文件</span>
+              <strong id="transactionFilesMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>明细行</span>
+              <strong id="transactionRowsMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>国家</span>
+              <strong id="transactionCountriesMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>异常</span>
+              <strong id="transactionWarningsMetric">0</strong>
+            </div>
+          </section>
+
+          <section class="table-panel">
+            <div class="panel-header">
+              <div>
+                <h2>清洗结果</h2>
+                <p id="transactionBatchLabel">尚未处理交易明细</p>
+              </div>
+              <div id="transactionStatusText" class="status-text">等待导入</div>
+            </div>
+            <div class="table-wrap">
+              <table class="transaction-table">
+                <thead>
+                  <tr>
+                    <th>来源文件</th>
+                    <th>品牌</th>
+                    <th>国家</th>
+                    <th>货币</th>
+                    <th>源行/解析</th>
+                    <th>日期范围</th>
+                    <th>状态</th>
+                    <th>备注</th>
+                  </tr>
+                </thead>
+                <tbody id="transactionResultBody">
+                  <tr>
+                    <td class="empty" colspan="8">处理一批交易明细 CSV/XLSX 后，结果会显示在这里。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
         <section id="historyView" class="view-panel hidden" data-view-panel="history">
           <header class="topbar">
             <div>
-              <p class="kicker">TASK HISTORY</p>
+              <p class="kicker">历史任务</p>
               <h1>历史任务</h1>
             </div>
             <div class="topbar-actions">
@@ -228,6 +395,10 @@
             <div class="metric compact">
               <span>交易报告</span>
               <strong id="historyReportMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>交易明细</span>
+              <strong id="historyTransactionMetric">0</strong>
             </div>
             <div class="metric compact">
               <span>需复核</span>
@@ -268,7 +439,7 @@
         <section id="settingsView" class="view-panel hidden" data-view-panel="settings">
           <header class="topbar">
             <div>
-              <p class="kicker">SETTINGS</p>
+              <p class="kicker">系统设置</p>
               <h1>系统设置</h1>
             </div>
             <div class="topbar-actions">
@@ -278,27 +449,27 @@
 
           <section class="settings-grid" aria-label="系统设置">
             <div class="settings-panel">
-              <span class="section-label">SERVICE</span>
+              <span class="section-label">服务</span>
               <h2>服务状态</h2>
               <dl class="settings-list" id="serviceSettingsList"></dl>
             </div>
             <div class="settings-panel">
-              <span class="section-label">PATHS</span>
+              <span class="section-label">路径</span>
               <h2>目录权限</h2>
               <dl class="settings-list" id="pathSettingsList"></dl>
             </div>
             <div class="settings-panel">
-              <span class="section-label">PROCESSING</span>
+              <span class="section-label">处理</span>
               <h2>处理策略</h2>
               <div id="processingSettingsList" class="settings-stack"></div>
             </div>
             <div class="settings-panel">
-              <span class="section-label">DEPLOYMENT</span>
+              <span class="section-label">部署</span>
               <h2>部署说明</h2>
               <div id="deploymentSettingsList" class="settings-stack"></div>
             </div>
             <div id="userManagementPanel" class="settings-panel full-span hidden">
-              <span class="section-label">ADMIN</span>
+              <span class="section-label">管理员</span>
               <h2>用户管理</h2>
               <form id="userForm" class="user-form">
                 <input id="newUsername" type="text" placeholder="用户名" autocomplete="off" />
@@ -336,7 +507,7 @@
 
       <aside class="inspector" aria-label="批次状态">
         <div class="inspector-section" data-inspector-panel="shipment">
-          <span class="section-label">BATCH</span>
+          <span class="section-label">批次</span>
           <h2>批次概览</h2>
         </div>
         <section class="summary-grid" aria-label="批次概览" data-inspector-panel="shipment">
@@ -358,27 +529,32 @@
           </div>
         </section>
         <div class="inspector-section" id="exports">
-          <span class="section-label">EXPORTS</span>
+          <span class="section-label">导出</span>
           <p>CSV / Excel</p>
         </div>
         <div class="inspector-section hidden" data-inspector-panel="report">
-          <span class="section-label">REPORTS</span>
+          <span class="section-label">交易报告</span>
           <h2>交易报告</h2>
           <p>生成带核验表的 Excel 工作簿</p>
         </div>
+        <div class="inspector-section hidden" data-inspector-panel="transaction">
+          <span class="section-label">交易明细</span>
+          <h2>交易明细</h2>
+          <p>清洗 CSV/XLSX 并生成总表和审计</p>
+        </div>
         <div class="inspector-section hidden" data-inspector-panel="history">
-          <span class="section-label">HISTORY</span>
+          <span class="section-label">历史</span>
           <h2>历史任务</h2>
           <p>当前服务运行期间的批次记录</p>
         </div>
         <div class="inspector-section hidden" data-inspector-panel="settings">
-          <span class="section-label">SETTINGS</span>
+          <span class="section-label">设置</span>
           <h2>系统设置</h2>
           <p>路径、部署与处理策略</p>
         </div>
       </aside>
     </div>
 
-    <script src="/static/app.js?v=20260621-shipment-package"></script>
+    <script src="/static/app.js?v=20260628-transaction-csv"></script>
   </body>
 </html>

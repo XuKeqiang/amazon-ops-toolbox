@@ -22,12 +22,14 @@ from .auth import (
     find_user_by_username,
     hash_password,
     load_users,
+    normalize_password,
     normalize_username,
     public_user,
     save_users,
     validate_role,
     verify_password,
 )
+from .config import APP_ROOT, PROJECT_ROOT, STATIC_ROOT, load_config
 from .report_pdf.batch import ReportPdfJob, process_report_folder
 from .shipment_pdf.batch import (
     apply_renames,
@@ -38,17 +40,25 @@ from .shipment_pdf.batch import (
     scan_folder,
 )
 from .shipment_pdf.models import ShipmentRecord
+from .storage import (
+    get_task,
+    init_db,
+    list_tasks,
+    record_export,
+    record_operation,
+    record_task,
+    update_task_downloads,
+)
+from .transaction_csv.batch import TransactionCsvJob, process_transaction_folder
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-APP_ROOT = Path(__file__).resolve().parents[1]
-STATIC_ROOT = APP_ROOT / "static"
-DATA_ROOT = PROJECT_ROOT / "data"
-UPLOAD_ROOT = DATA_ROOT / "uploads"
-OUTPUT_ROOT = DATA_ROOT / "outputs"
-USER_STORE = DATA_ROOT / "users.json"
-LEGACY_REPORT_ROOT = Path("/Users/xukeqiang/Documents/Amazon_Data_Process")
-ALLOWED_INPUT_ROOTS = (PROJECT_ROOT.resolve(), LEGACY_REPORT_ROOT.resolve())
+CONFIG = load_config()
+DATA_ROOT = CONFIG.data_root
+UPLOAD_ROOT = CONFIG.upload_root
+OUTPUT_ROOT = CONFIG.output_root
+USER_STORE = CONFIG.user_store
+DATABASE_PATH = CONFIG.database_path
+ALLOWED_INPUT_ROOTS = CONFIG.allowed_input_roots
 
 
 @dataclass
@@ -63,7 +73,7 @@ class BatchState:
 
 BATCHES: dict[str, BatchState] = {}
 REPORT_JOBS: dict[str, ReportPdfJob] = {}
-TASK_HISTORY: list[dict] = []
+TRANSACTION_JOBS: dict[str, TransactionCsvJob] = {}
 SESSIONS: dict[str, str] = {}
 SHIPMENT_PACKAGES: dict[str, list[dict]] = {}
 
@@ -91,6 +101,8 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_export(parse_qs(parsed.query))
         elif parsed.path == "/api/report-pdf/download":
             self._handle_report_download(parse_qs(parsed.query))
+        elif parsed.path == "/api/transaction-csv/download":
+            self._handle_transaction_download(parse_qs(parsed.query))
         elif parsed.path == "/api/shipment-package/download":
             self._handle_shipment_package_download(parse_qs(parsed.query))
         else:
@@ -108,6 +120,8 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_create_user()
         elif parsed.path == "/api/report-pdf/process-folder":
             self._handle_report_process_folder()
+        elif parsed.path == "/api/transaction-csv/process-folder":
+            self._handle_transaction_process_folder()
         elif parsed.path == "/api/upload":
             self._handle_upload()
         elif parsed.path == "/api/rename":
@@ -141,7 +155,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
     def _handle_login(self) -> None:
         payload = self._read_json()
         username = normalize_username(str(payload.get("username", "")))
-        password = str(payload.get("password", ""))
+        password = normalize_password(str(payload.get("password", "")))
         users = load_users(USER_STORE)
         user = find_user_by_username(users, username)
         if not user or not user.get("active", True) or not verify_password(password, user.get("password_hash", "")):
@@ -150,15 +164,33 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
 
         token = uuid.uuid4().hex + uuid.uuid4().hex
         SESSIONS[token] = user["id"]
+        record_operation(
+            DATABASE_PATH,
+            operation="login",
+            owner=user,
+            target_id=user["id"],
+            target_type="user",
+            message="用户登录",
+        )
         self._send_json(
             {"authenticated": True, "user": public_user(user)},
             headers={"Set-Cookie": _session_cookie(token)},
         )
 
     def _handle_logout(self) -> None:
+        user = self._current_user()
         token = self._session_token()
         if token:
             SESSIONS.pop(token, None)
+        if user:
+            record_operation(
+                DATABASE_PATH,
+                operation="logout",
+                owner=user,
+                target_id=user["id"],
+                target_type="user",
+                message="用户退出登录",
+            )
         self._send_json({"ok": True}, headers={"Set-Cookie": _clear_session_cookie()})
 
     def _handle_history(self) -> None:
@@ -214,6 +246,15 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         }
         users.append(new_user)
         save_users(USER_STORE, users)
+        record_operation(
+            DATABASE_PATH,
+            operation="user_create",
+            owner=admin,
+            target_id=new_user["id"],
+            target_type="user",
+            message=f"创建用户 {new_user['username']}",
+            payload={"role": role, "active": new_user["active"]},
+        )
         self._send_json({"user": public_user(new_user)})
 
     def _handle_update_user(self, user_id: str) -> None:
@@ -255,6 +296,15 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             user["password_hash"] = hash_password(password)
         user["updated_at"] = _now_label()
         save_users(USER_STORE, users)
+        record_operation(
+            DATABASE_PATH,
+            operation="user_update",
+            owner=admin,
+            target_id=user["id"],
+            target_type="user",
+            message=f"更新用户 {user['username']}",
+            payload={"fields": sorted(payload.keys())},
+        )
         self._send_json({"user": public_user(user)})
 
     def _handle_delete_user(self, user_id: str) -> None:
@@ -274,6 +324,14 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         for token, session_user_id in list(SESSIONS.items()):
             if session_user_id == user_id:
                 SESSIONS.pop(token, None)
+        record_operation(
+            DATABASE_PATH,
+            operation="user_delete",
+            owner=admin,
+            target_id=user_id,
+            target_type="user",
+            message=f"删除用户 {user['username']}",
+        )
         self._send_json({"deleted": True})
 
     def _handle_scan_folder(self) -> None:
@@ -296,7 +354,20 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
 
         records = scan_folder(folder)
         batch = _store_batch(source_label=str(folder), records=records, owner=user)
-        self._send_json(_batch_payload(batch))
+        record_operation(
+            DATABASE_PATH,
+            operation="shipment_scan_folder",
+            owner=user,
+            target_id=batch.batch_id,
+            target_type="shipment_pdf",
+            message=f"扫描货件 PDF 文件夹：{folder}",
+            payload={"records": len(records)},
+        )
+        logs = [
+            {"level": "info", "message": f"开始扫描服务器文件夹：{folder}"},
+            {"level": "success", "message": f"扫描完成：识别到 {len(records)} 个 PDF"},
+        ]
+        self._send_json(_batch_payload(batch, logs=logs))
 
     def _handle_report_process_folder(self) -> None:
         user = self._require_auth()
@@ -331,11 +402,86 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             downloads=[{"label": "Excel 工作簿", "url": f"/api/report-pdf/download?job_id={job.job_id}"}],
             owner=user,
         )
+        record_operation(
+            DATABASE_PATH,
+            operation="report_pdf_process_folder",
+            owner=user,
+            target_id=job.job_id,
+            target_type="report_pdf",
+            message=f"处理交易报告 PDF 文件夹：{folder}",
+            payload=job.summary,
+        )
         self._send_json(_report_job_payload(job))
+
+    def _handle_transaction_process_folder(self) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        payload = self._read_json()
+        folder_text = str(payload.get("folder", "")).strip()
+        if not folder_text:
+            self._send_json({"error": "请提供服务器上的交易明细 CSV/XLSX 文件夹路径"}, status=400)
+            return
+
+        folder = _resolve_allowed_folder(folder_text)
+        if folder is None:
+            self._send_json({"error": f"为了安全，当前只允许扫描这些目录：{_allowed_roots_label()}"}, status=400)
+            return
+        if not folder.exists() or not folder.is_dir():
+            self._send_json({"error": "文件夹不存在或不是有效目录"}, status=400)
+            return
+
+        job_id = _new_batch_id()
+        output_dir = OUTPUT_ROOT / f"{job_id}-transaction-csv"
+        job = process_transaction_folder(
+            folder,
+            output_dir,
+            job_id,
+            label=folder.name,
+            include_country_files=bool(payload.get("include_country_files", False)),
+            include_quarter_backup=bool(payload.get("include_quarter_backup", False)),
+        )
+        TRANSACTION_JOBS[job.job_id] = job
+        status = "需复核" if (
+            job.summary.get("date_parse_failures")
+            or job.summary.get("amount_failures")
+            or job.summary.get("unresolved_country_files")
+            or job.summary.get("unsupported_files")
+        ) else "完成"
+        _record_history(
+            task_id=job.job_id,
+            task_type="transaction_csv",
+            title="交易明细 CSV",
+            source_label=job.source_label,
+            summary=job.summary,
+            status=status,
+            downloads=[
+                {"label": "交易总表", "url": f"/api/transaction-csv/download?job_id={job.job_id}&file=total"},
+                {"label": "审计报告", "url": f"/api/transaction-csv/download?job_id={job.job_id}&file=audit"},
+            ],
+            owner=user,
+        )
+        record_operation(
+            DATABASE_PATH,
+            operation="transaction_csv_process_folder",
+            owner=user,
+            target_id=job.job_id,
+            target_type="transaction_csv",
+            message=f"处理交易明细文件夹：{folder}",
+            payload=job.summary,
+        )
+        self._send_json(_transaction_job_payload(job))
 
     def _handle_upload(self) -> None:
         user = self._require_auth()
         if not user:
+            return
+        content_length = int(self.headers.get("Content-Length", "0") or "0")
+        if content_length > CONFIG.max_upload_bytes:
+            self._send_json(
+                {"error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB"},
+                status=413,
+            )
             return
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
@@ -356,29 +502,62 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             },
         )
 
+        received = 0
         saved = 0
+        skipped = 0
+        renamed = 0
         files = form["files"] if "files" in form else []
         if not isinstance(files, list):
             files = [files]
         for item in files:
-            if not getattr(item, "filename", ""):
+            received += 1
+            upload_path = _safe_upload_relative_path(getattr(item, "filename", ""))
+            if upload_path is None:
+                skipped += 1
                 continue
-            filename = Path(item.filename).name
-            if not filename.lower().endswith(".pdf"):
+            if upload_path.suffix.lower() != ".pdf":
+                skipped += 1
                 continue
-            target = upload_dir / filename
+            target = _unique_upload_target(upload_dir / upload_path)
+            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
+                renamed += 1
+            target.parent.mkdir(parents=True, exist_ok=True)
             with target.open("wb") as handle:
                 shutil.copyfileobj(item.file, handle)
             saved += 1
 
         if saved == 0:
             shutil.rmtree(upload_dir, ignore_errors=True)
-            self._send_json({"error": "没有收到 PDF 文件"}, status=400)
+            self._send_json({
+                "error": "没有收到 PDF 文件",
+                "logs": [
+                    {"level": "info", "message": f"收到 {received} 个上传文件"},
+                    {"level": "warning", "message": f"跳过 {skipped} 个非 PDF 或无效文件"},
+                ],
+            }, status=400)
             return
 
         records = scan_folder(upload_dir)
         batch = _store_batch(source_label=f"上传批次 {batch_id}", records=records, batch_id=batch_id, owner=user)
-        self._send_json(_batch_payload(batch))
+        record_operation(
+            DATABASE_PATH,
+            operation="shipment_upload",
+            owner=user,
+            target_id=batch.batch_id,
+            target_type="shipment_pdf",
+            message=f"上传并扫描货件 PDF：{batch_id}",
+            payload={"received": received, "saved": saved, "skipped": skipped, "records": len(records)},
+        )
+        logs = [
+            {"level": "info", "message": f"收到 {received} 个上传文件"},
+            {"level": "success", "message": f"保存 {saved} 个 PDF 到上传批次 {batch_id}"},
+        ]
+        if skipped:
+            logs.append({"level": "warning", "message": f"跳过 {skipped} 个非 PDF 或无效文件"})
+        if renamed:
+            logs.append({"level": "warning", "message": f"发现 {renamed} 个重名 PDF，已自动加序号保存"})
+        logs.append({"level": "success", "message": f"扫描完成：识别到 {len(records)} 个 PDF"})
+        self._send_json(_batch_payload(batch, logs=logs))
 
     def _handle_export(self, query: dict[str, list[str]]) -> None:
         user = self._require_auth()
@@ -404,6 +583,22 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             export_csv(batch.records, output_path)
             content_type = "text/csv; charset=utf-8"
 
+        record_export(
+            DATABASE_PATH,
+            task_id=batch.batch_id,
+            export_type=f"shipment_{export_format}",
+            file_path=output_path,
+            owner=user,
+        )
+        record_operation(
+            DATABASE_PATH,
+            operation="shipment_export",
+            owner=user,
+            target_id=batch.batch_id,
+            target_type="shipment_pdf",
+            message=f"导出货件识别结果：{output_path.name}",
+            payload={"format": export_format},
+        )
         self._send_download(output_path, content_type)
 
     def _handle_report_download(self, query: dict[str, list[str]]) -> None:
@@ -412,17 +607,51 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             return
         job_id = _first_query(query, "job_id")
         job = REPORT_JOBS.get(job_id)
-        if not job:
-            self._send_json({"error": "任务不存在或服务已重启"}, status=404)
-            return
-        history_item = next((item for item in TASK_HISTORY if item["id"] == job_id), None)
+        history_item = get_task(DATABASE_PATH, job_id)
         if history_item and not _can_access_owner(user, history_item.get("owner_id", "")):
             self._send_json({"error": "没有权限下载该任务"}, status=403)
             return
-        self._send_download(
-            job.output_path,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        output_path = job.output_path if job else OUTPUT_ROOT / f"{job_id}-amazon-report-pdf-results.xlsx"
+        if not output_path.is_file():
+            self._send_json({"error": "导出文件不存在，请重新处理该任务"}, status=404)
+            return
+        record_export(
+            DATABASE_PATH,
+            task_id=job_id,
+            export_type="report_pdf_xlsx",
+            file_path=output_path,
+            owner=user,
         )
+        self._send_download(output_path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def _handle_transaction_download(self, query: dict[str, list[str]]) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        job_id = _first_query(query, "job_id")
+        file_key = _first_query(query, "file") or "total"
+        job = TRANSACTION_JOBS.get(job_id)
+        history_item = get_task(DATABASE_PATH, job_id)
+        if history_item and not _can_access_owner(user, history_item.get("owner_id", "")):
+            self._send_json({"error": "没有权限下载该任务"}, status=403)
+            return
+        if job:
+            path = job.audit_xlsx_path if file_key == "audit" else job.total_path
+        else:
+            filename_key = "audit_filename" if file_key == "audit" else "output_filename"
+            filename = (history_item or {}).get("summary", {}).get(filename_key, "")
+            path = OUTPUT_ROOT / f"{job_id}-transaction-csv" / filename
+        if not path.is_file():
+            self._send_json({"error": "导出文件不存在，请重新处理该任务"}, status=404)
+            return
+        record_export(
+            DATABASE_PATH,
+            task_id=job_id,
+            export_type=f"transaction_csv_{file_key}",
+            file_path=path,
+            owner=user,
+        )
+        self._send_download(path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     def _handle_shipment_package_download(self, query: dict[str, list[str]]) -> None:
         user = self._require_auth()
@@ -442,9 +671,16 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "打包文件不存在"}, status=404)
             return
         zip_path = Path(package["zip_path"])
-        if not zip_path.exists():
+        if not zip_path.is_file():
             self._send_json({"error": "打包文件已被移动或删除"}, status=404)
             return
+        record_export(
+            DATABASE_PATH,
+            task_id=batch_id,
+            export_type="shipment_factory_zip",
+            file_path=zip_path,
+            owner=user,
+        )
         self._send_download(zip_path, "application/zip")
 
     def _handle_rename(self) -> None:
@@ -466,6 +702,15 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             return
 
         plans = apply_renames(batch.records)
+        record_operation(
+            DATABASE_PATH,
+            operation="shipment_rename",
+            owner=user,
+            target_id=batch.batch_id,
+            target_type="shipment_pdf",
+            message="批量重命名货件 PDF",
+            payload={"renamed": sum(1 for plan in plans if plan.can_apply)},
+        )
         self._send_json(
             {
                 "batch_id": batch.batch_id,
@@ -509,6 +754,15 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             batch.batch_id,
             [{"label": f"{item['factory_name']} 压缩包", "url": item["download_url"]} for item in packages],
         )
+        record_operation(
+            DATABASE_PATH,
+            operation="shipment_package_by_factory",
+            owner=user,
+            target_id=batch.batch_id,
+            target_type="shipment_pdf",
+            message="按工厂打包货件 PDF",
+            payload={"packages": len(packages), "skipped": result["skipped"]},
+        )
         self._send_json(
             {
                 "batch_id": batch.batch_id,
@@ -527,6 +781,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
         for key, value in (headers or {}).items():
             self.send_header(key, value)
         self.send_header("Content-Length", str(len(body)))
@@ -634,10 +889,10 @@ def _store_batch(
     return batch
 
 
-def _batch_payload(batch: BatchState) -> dict:
+def _batch_payload(batch: BatchState, logs: list[dict] | None = None) -> dict:
     plans = plan_renames(batch.records)
     valid_count = sum(1 for record in batch.records if record.is_valid)
-    return {
+    payload = {
         "batch_id": batch.batch_id,
         "source_label": batch.source_label,
         "summary": {
@@ -655,6 +910,9 @@ def _batch_payload(batch: BatchState) -> dict:
             for record, plan in zip(batch.records, plans)
         ],
     }
+    if logs is not None:
+        payload["logs"] = logs
+    return payload
 
 
 def _report_job_payload(job: ReportPdfJob) -> dict:
@@ -667,16 +925,27 @@ def _report_job_payload(job: ReportPdfJob) -> dict:
     }
 
 
-def _history_payload(user: dict) -> dict:
-    tasks = TASK_HISTORY if user.get("role") == "admin" else [
-        task for task in TASK_HISTORY if task.get("owner_id") == user["id"]
-    ]
+def _transaction_job_payload(job: TransactionCsvJob) -> dict:
     return {
-        "tasks": list(reversed(tasks)),
+        "job_id": job.job_id,
+        "source_label": job.source_label,
+        "summary": job.summary,
+        "rows": job.rows,
+        "countries": job.countries,
+        "download_url": f"/api/transaction-csv/download?job_id={job.job_id}&file=total",
+        "audit_download_url": f"/api/transaction-csv/download?job_id={job.job_id}&file=audit",
+    }
+
+
+def _history_payload(user: dict) -> dict:
+    tasks = list_tasks(DATABASE_PATH, user)
+    return {
+        "tasks": tasks,
         "summary": {
             "total": len(tasks),
             "shipment_pdf": sum(1 for task in tasks if task["type"] == "shipment_pdf"),
             "report_pdf": sum(1 for task in tasks if task["type"] == "report_pdf"),
+            "transaction_csv": sum(1 for task in tasks if task["type"] == "transaction_csv"),
             "needs_review": sum(1 for task in tasks if task["status"] == "需复核"),
         },
     }
@@ -698,19 +967,27 @@ def _settings_payload(server_address: tuple[str, int], user: dict) -> dict:
         },
         "paths": {
             "project_root": str(PROJECT_ROOT.resolve()),
+            "config_path": str(CONFIG.config_path.resolve()),
+            "database_path": str(DATABASE_PATH.resolve()),
             "output_root": str(OUTPUT_ROOT.resolve()),
             "upload_root": str(UPLOAD_ROOT.resolve()),
-            "allowed_input_roots": [str(root) for root in ALLOWED_INPUT_ROOTS if root.exists()],
+            "backup_root": str(CONFIG.backup_root.resolve()),
+            "allowed_input_roots": [str(root) for root in ALLOWED_INPUT_ROOTS],
+        },
+        "limits": {
+            "max_upload_mb": CONFIG.max_upload_mb,
         },
         "processing": [
             {"name": "货件 PDF", "engine": "pdfplumber / pypdf 规则提取", "llm": "不依赖"},
             {"name": "交易报告 PDF", "engine": "pdfplumber 表格结构解析 + 对账校验", "llm": "不依赖"},
+            {"name": "交易明细 CSV/XLSX", "engine": "openpyxl / csv 规则清洗、字段翻译、记录类型分类", "llm": "不依赖"},
         ],
         "exports": ["CSV", "Excel"],
         "deployment_notes": [
             "当前服务可部署在公司内网机器上，由团队通过浏览器访问。",
             "上传文件写入 data/uploads，导出文件写入 data/outputs。",
-            "历史任务当前保存在服务运行内存中，重启后会清空；后续可升级为 SQLite 或 JSON 持久化。",
+            "历史任务、导出记录和操作日志已写入 SQLite，服务重启后可继续查看。",
+            "端口、允许扫描目录和上传大小限制可通过 config/app-config.json 调整。",
         ],
     }
 
@@ -725,7 +1002,8 @@ def _record_history(
     downloads: list[dict],
     owner: dict,
 ) -> None:
-    TASK_HISTORY.append(
+    record_task(
+        DATABASE_PATH,
         {
             "id": task_id,
             "type": task_type,
@@ -738,20 +1016,12 @@ def _record_history(
             "owner_id": owner["id"],
             "owner_name": owner.get("display_name") or owner["username"],
             "owner_username": owner["username"],
-        }
+        },
     )
-    del TASK_HISTORY[:-80]
 
 
 def _update_history_downloads(task_id: str, downloads: list[dict]) -> None:
-    for task in TASK_HISTORY:
-        if task["id"] != task_id:
-            continue
-        existing_urls = {item.get("url") for item in task.get("downloads", [])}
-        task.setdefault("downloads", []).extend(
-            item for item in downloads if item.get("url") not in existing_urls
-        )
-        break
+    update_task_downloads(DATABASE_PATH, task_id, downloads)
 
 
 def _resolve_allowed_folder(folder_text: str) -> Path | None:
@@ -765,8 +1035,38 @@ def _resolve_allowed_folder(folder_text: str) -> Path | None:
     return None
 
 
+def _safe_upload_relative_path(raw_filename: str) -> Path | None:
+    cleaned = raw_filename.replace("\\", "/").strip()
+    parts = [_sanitize_upload_part(part) for part in cleaned.split("/")]
+    parts = [part for part in parts if part and part not in {".", ".."}]
+    if not parts:
+        return None
+    return Path(*parts)
+
+
+def _sanitize_upload_part(value: str) -> str:
+    cleaned = value.strip().replace("\x00", "")
+    for char in '<>:"|?*':
+        cleaned = cleaned.replace(char, "")
+    return cleaned[:120]
+
+
+def _unique_upload_target(target: Path) -> Path:
+    if not target.exists():
+        return target
+    stem = target.stem
+    suffix = target.suffix
+    parent = target.parent
+    index = 2
+    while True:
+        candidate = parent / f"{stem}-{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
 def _allowed_roots_label() -> str:
-    return "、".join(str(root) for root in ALLOWED_INPUT_ROOTS if root.exists())
+    return "、".join(str(root) for root in ALLOWED_INPUT_ROOTS)
 
 
 def _new_batch_id() -> str:
@@ -803,10 +1103,15 @@ def _ascii_download_filename(filename: str) -> str:
     return cleaned or "download"
 
 
-def run(host: str, port: int) -> None:
+def run(host: str | None = None, port: int | None = None) -> None:
+    host = host or CONFIG.host
+    port = port or CONFIG.port
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    CONFIG.backup_root.mkdir(parents=True, exist_ok=True)
     ensure_user_store(USER_STORE)
+    init_db(DATABASE_PATH)
     server = ThreadingHTTPServer((host, port), AmazonToolboxHandler)
     print(f"Amazon Operations Toolbox running at http://{host}:{port}/")
     server.serve_forever()
@@ -814,8 +1119,8 @@ def run(host: str, port: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Amazon Operations Toolbox")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--host", default=None)
+    parser.add_argument("--port", type=int, default=None)
     args = parser.parse_args()
     run(args.host, args.port)
 

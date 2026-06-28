@@ -13,7 +13,9 @@ from .models import RenamePlan, ShipmentRecord
 
 EXPORT_COLUMNS = [
     "原文件名",
+    "标签类型",
     "工厂名",
+    "物流单号",
     "文件名SKU",
     "文件名国家",
     "文件名箱数",
@@ -29,6 +31,7 @@ EXPORT_COLUMNS = [
     "箱码个数",
     "每箱数量",
     "总件数",
+    "大货总箱数",
     "Single SKU",
     "状态",
     "问题说明",
@@ -39,11 +42,24 @@ EXPORT_COLUMNS = [
 
 
 def scan_folder(folder: Path) -> list[ShipmentRecord]:
-    pdf_paths = sorted(path for path in folder.iterdir() if path.suffix.lower() == ".pdf")
+    pdf_paths = sorted(path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() == ".pdf")
     return [extract_pdf(path) for path in pdf_paths]
 
 
 def build_suggested_filename(record: ShipmentRecord) -> str:
+    if record.label_type == "forwarder":
+        total_part = f"{record.box_count}箱"
+        parts = [
+            record.filename_info.factory_name,
+            record.logistics_code or record.filename_info.logistics_code,
+            total_part,
+            record.warehouse,
+            record.fba_code,
+            _country_filename_token(record.destination_country),
+        ]
+        safe_parts = [_sanitize_filename_part(part) for part in parts if part]
+        return "-".join(safe_parts) + ".pdf"
+
     product_name = record.title_product_name or record.product_name
     factory_name = record.filename_info.factory_name
     total_part = f"{record.total_units}个" if record.total_units is not None else f"{record.box_count}箱"
@@ -93,7 +109,9 @@ def records_to_rows(records: list[ShipmentRecord]) -> list[dict]:
     return [
         {
             "原文件名": record.original_filename,
+            "标签类型": _label_type_name(record.label_type),
             "工厂名": record.filename_info.factory_name,
+            "物流单号": record.logistics_code or record.filename_info.logistics_code,
             "文件名SKU": record.filename_info.sku,
             "文件名国家": record.filename_info.country,
             "文件名箱数": record.filename_info.box_count,
@@ -109,6 +127,7 @@ def records_to_rows(records: list[ShipmentRecord]) -> list[dict]:
             "箱码个数": record.box_count,
             "每箱数量": record.quantity_per_box,
             "总件数": record.total_units,
+            "大货总箱数": record.shipment_total_boxes,
             "Single SKU": "是" if record.is_single_sku else "否",
             "状态": "通过" if record.is_valid else "需复核",
             "问题说明": "；".join(record.notes),
@@ -154,7 +173,16 @@ def _country_filename_token(country: str) -> str:
     return {
         "澳大利亚": "澳大利亚",
         "美国": "美国",
+        "沙特": "沙特",
+        "阿联酋": "阿联酋",
     }.get(country, country)
+
+
+def _label_type_name(label_type: str) -> str:
+    return {
+        "forwarder": "货代/冷门站点标签",
+        "amazon": "Amazon 官方外箱标",
+    }.get(label_type, label_type or "Amazon 官方外箱标")
 
 
 def package_by_factory(records: list[ShipmentRecord], output_dir: Path, batch_id: str) -> dict:

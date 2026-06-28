@@ -19,10 +19,19 @@ COUNTRY_NAMES = (
     "西班牙",
     "日本",
     "墨西哥",
+    "沙特",
+    "阿联酋",
 )
 
 WAREHOUSE_RE = re.compile(r"([\w\u4e00-\u9fff（）()\-\s]+)-([A-Z]{2,4}\d?)\s+Created:")
 CARTON_RE = re.compile(r"\b(FBA[A-Z0-9]{8,20}U\d{6})\b")
+FORWARDER_LABEL_RE = re.compile(r"(?m)^(FA[A-Z]{2}\d{12}S[YU]?\d{4})$")
+FORWARDER_FILENAME_RE = re.compile(
+    r"^(?P<country>[^-－—–]+)[-－—–](?P<logistics>FA[A-Z]{2}\d{12}S)[（(](?P<start>\d+)[-－—–](?P<end>\d+)[）)](?P<factory>.+)$"
+)
+FORWARDER_FBA_TOTAL_RE = re.compile(r"\b(FBA[A-Z0-9]{8,20})/(\d+)\b")
+FORWARDER_COUNTRY_RE = re.compile(r"(?m)^([\u4e00-\u9fff]+)\([^)]*\)$")
+FORWARDER_PAGE_MARK_RE = re.compile(r"(?m)^(\d+)/(\d+)$")
 SKU_RE = re.compile(r"(?m)^(\d{7}(?:-[A-Z0-9]+)?)$")
 QUANTITY_RE = re.compile(r"^数量\s*\d+")
 QUANTITY_VALUE_RE = re.compile(r"^数量\s*(\d+)")
@@ -55,6 +64,13 @@ COUNTRY_ALIASES = {
     "日本": "日本",
     "MX": "墨西哥",
     "墨西哥": "墨西哥",
+    "SA": "沙特",
+    "KSA": "沙特",
+    "沙特": "沙特",
+    "沙特阿拉伯": "沙特",
+    "AE": "阿联酋",
+    "UAE": "阿联酋",
+    "阿联酋": "阿联酋",
 }
 
 
@@ -68,6 +84,9 @@ def extract_pdf(path: Path) -> ShipmentRecord:
 
 def parse_label_text(source_path: Path, page_texts: list[str] | tuple[str, ...]) -> ShipmentRecord:
     all_text = "\n".join(page_texts)
+    if _looks_like_forwarder_label(all_text):
+        return _parse_forwarder_label_text(source_path, page_texts)
+
     carton_codes = tuple(dict.fromkeys(CARTON_RE.findall(all_text)))
     notes: list[str] = []
 
@@ -136,6 +155,10 @@ def parse_label_text(source_path: Path, page_texts: list[str] | tuple[str, ...])
 
 def parse_filename_info(filename: str) -> FilenameShipmentInfo:
     stem = Path(filename).stem.strip()
+    forwarder_info = _parse_forwarder_filename_info(stem)
+    if forwarder_info:
+        return forwarder_info
+
     parts = [part.strip() for part in re.split(r"[-－—–]+", stem) if part.strip()]
     notes: list[str] = []
     if len(parts) < 6:
@@ -191,6 +214,7 @@ def parse_filename_info(filename: str) -> FilenameShipmentInfo:
 
     return FilenameShipmentInfo(
         factory_name=factory_name,
+        logistics_code="",
         sku=sku,
         product_name=product_name,
         country=country,
@@ -200,6 +224,150 @@ def parse_filename_info(filename: str) -> FilenameShipmentInfo:
         total_units=total_units,
         notes=tuple(notes),
     )
+
+
+def _looks_like_forwarder_label(text: str) -> bool:
+    return bool(FORWARDER_LABEL_RE.search(text) and FORWARDER_FBA_TOTAL_RE.search(text))
+
+
+def _parse_forwarder_label_text(source_path: Path, page_texts: list[str] | tuple[str, ...]) -> ShipmentRecord:
+    all_text = "\n".join(page_texts)
+    notes: list[str] = []
+    label_codes = tuple(dict.fromkeys(FORWARDER_LABEL_RE.findall(all_text)))
+    logistics_code = _common_forwarder_logistics_code(label_codes)
+    fba_code, shipment_total_boxes = _extract_forwarder_fba_and_total(all_text)
+    destination_country = _extract_forwarder_country(all_text) or _normalize_filename_country(Path(source_path).stem.split("-")[0])
+    warehouse = _extract_forwarder_warehouse(page_texts[0] if page_texts else "")
+    box_count = len(page_texts)
+    filename_info = parse_filename_info(source_path.name)
+    comparison_notes = _compare_forwarder_filename_info(
+        filename_info=filename_info,
+        pdf_country=destination_country,
+        pdf_logistics_code=logistics_code,
+        pdf_box_count=box_count,
+    )
+
+    if not label_codes:
+        notes.append("未识别到物流箱码")
+    if not logistics_code:
+        notes.append("未识别到物流单号")
+    if not destination_country:
+        notes.append("未识别到目的地国家")
+    if not warehouse:
+        notes.append("未识别到仓库名称")
+    if not fba_code:
+        notes.append("未识别到 FBA 物流编码")
+    if shipment_total_boxes is None:
+        notes.append("未识别到大货总箱数")
+    if label_codes and len(label_codes) != box_count:
+        notes.append(f"物流箱码数量 {len(label_codes)} 与 PDF 页数 {box_count} 不一致")
+
+    page_mark_count, page_mark_total = _extract_forwarder_page_marks(all_text)
+    if page_mark_count and page_mark_count != box_count:
+        notes.append(f"箱码序号数量 {page_mark_count} 与 PDF 页数 {box_count} 不一致")
+    if page_mark_total is not None and shipment_total_boxes is not None and page_mark_total != shipment_total_boxes:
+        notes.append(f"大货总箱数不一致：FBA 行 {shipment_total_boxes} / 页码行 {page_mark_total}")
+
+    return ShipmentRecord(
+        source_path=source_path,
+        original_filename=source_path.name,
+        sku="",
+        product_name="",
+        destination_country=destination_country,
+        warehouse=warehouse,
+        fba_code=fba_code,
+        box_count=box_count,
+        carton_codes=label_codes,
+        is_single_sku=False,
+        quantity_per_box=None,
+        total_units=None,
+        label_type="forwarder",
+        logistics_code=logistics_code,
+        shipment_total_boxes=shipment_total_boxes,
+        label_title="货代/冷门站点标签",
+        title_product_name="",
+        created_at="",
+        filename_info=filename_info,
+        comparison_notes=tuple(comparison_notes),
+        notes=tuple(notes),
+    )
+
+
+def _parse_forwarder_filename_info(stem: str) -> FilenameShipmentInfo | None:
+    match = FORWARDER_FILENAME_RE.match(stem)
+    if not match:
+        return None
+    start = int(match.group("start"))
+    end = int(match.group("end"))
+    notes: list[str] = []
+    if end < start:
+        notes.append("文件名箱码范围异常")
+        box_count = None
+    else:
+        box_count = end - start + 1
+    country = _normalize_filename_country(match.group("country"))
+    if not country:
+        notes.append("文件名未识别到国家")
+    factory_name = match.group("factory").strip()
+    if not factory_name:
+        notes.append("文件名未识别到工厂名")
+    return FilenameShipmentInfo(
+        factory_name=factory_name,
+        logistics_code=match.group("logistics").upper(),
+        country=country,
+        box_count=box_count,
+        notes=tuple(notes),
+    )
+
+
+def _common_forwarder_logistics_code(label_codes: tuple[str, ...]) -> str:
+    prefixes = {re.sub(r"[YU]?\d{4}$", "", code.upper()) for code in label_codes}
+    return next(iter(prefixes)) if len(prefixes) == 1 else ""
+
+
+def _extract_forwarder_fba_and_total(text: str) -> tuple[str, int | None]:
+    match = FORWARDER_FBA_TOTAL_RE.search(text)
+    if not match:
+        return "", None
+    return match.group(1)[:12], int(match.group(2))
+
+
+def _extract_forwarder_country(text: str) -> str:
+    for match in FORWARDER_COUNTRY_RE.findall(text):
+        country = _normalize_country(match)
+        if country in set(COUNTRY_ALIASES.values()):
+            return country
+    return ""
+
+
+def _extract_forwarder_warehouse(first_page_text: str) -> str:
+    lines = [line.strip() for line in first_page_text.splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        if FORWARDER_FBA_TOTAL_RE.fullmatch(line) and index + 1 < len(lines):
+            return lines[index + 1].strip()
+    return ""
+
+
+def _extract_forwarder_page_marks(text: str) -> tuple[int, int | None]:
+    matches = [(int(current), int(total)) for current, total in FORWARDER_PAGE_MARK_RE.findall(text)]
+    if not matches:
+        return 0, None
+    totals = {total for _, total in matches}
+    return len(matches), next(iter(totals)) if len(totals) == 1 else None
+
+
+def _compare_forwarder_filename_info(
+    filename_info: FilenameShipmentInfo,
+    pdf_country: str,
+    pdf_logistics_code: str,
+    pdf_box_count: int,
+) -> list[str]:
+    notes: list[str] = []
+    _compare_text(notes, "国家", filename_info.country, _normalize_country(pdf_country))
+    _compare_text(notes, "物流单号", filename_info.logistics_code, pdf_logistics_code)
+    if filename_info.box_count is not None and filename_info.box_count != pdf_box_count:
+        notes.append(f"箱数不一致：文件名 {filename_info.box_count} / PDF {pdf_box_count}")
+    return notes
 
 
 def compare_filename_info(

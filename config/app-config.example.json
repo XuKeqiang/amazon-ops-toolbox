@@ -1,0 +1,24 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "paths": {
+    "data_root": "data",
+    "upload_root": "data/uploads",
+    "output_root": "data/outputs",
+    "database_path": "data/app.sqlite3",
+    "user_store": "data/users.json",
+    "allowed_input_roots": [
+      "/Users/xukeqiang/Documents/Amazon_Data_Management",
+      "/Users/xukeqiang/Documents/Amazon_Data_Process"
+    ]
+  },
+  "limits": {
+    "max_upload_mb": 500
+  },
+  "backups": {
+    "backup_root": "data/backups",
+    "retention_days": 14
+  }
+}

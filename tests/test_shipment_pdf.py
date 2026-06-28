@@ -1,7 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from app.amazon_toolbox import server
+from app.amazon_toolbox.shipment_pdf import batch as shipment_batch
 from app.amazon_toolbox.shipment_pdf.batch import build_suggested_filename, package_by_factory, plan_renames
 from app.amazon_toolbox.shipment_pdf.extractor import parse_filename_info, parse_label_text
 
@@ -38,6 +41,25 @@ Single SKU
 数量 48
 吉米烧火
 """
+
+
+FORWARDER_SA_LABEL_TEXT_1 = """FASA202605228410SY0001
+Receiver:
+Code: CUS250400097
+Wt: 1.000
+Cbm: 0.000
+ShortNo:
+50967221
+FBA
+FBA15LSJCSYS/140
+JED4
+沙特(普货)
+YB89933 海运
+1/140
+"""
+
+
+FORWARDER_SA_LABEL_TEXT_2 = FORWARDER_SA_LABEL_TEXT_1.replace("SY0001", "SY0002").replace("1/140", "2/140")
 
 
 class ShipmentPdfParsingTest(unittest.TestCase):
@@ -88,6 +110,39 @@ class ShipmentPdfParsingTest(unittest.TestCase):
         self.assertEqual(info.fba_code, "FBA19D8ZT5XR")
         self.assertEqual(info.country, "美国")
         self.assertEqual(info.notes, ())
+
+    def test_parse_forwarder_filename_info(self):
+        info = parse_filename_info("沙特-FASA202605228410S（1-20）晟通.pdf")
+
+        self.assertEqual(info.factory_name, "晟通")
+        self.assertEqual(info.logistics_code, "FASA202605228410S")
+        self.assertEqual(info.country, "沙特")
+        self.assertEqual(info.box_count, 20)
+        self.assertEqual(info.notes, ())
+
+    def test_parse_forwarder_label_text(self):
+        record = parse_label_text(
+            source_path=Path("沙特-FASA202605228410S（1-2）晟通.pdf"),
+            page_texts=[FORWARDER_SA_LABEL_TEXT_1, FORWARDER_SA_LABEL_TEXT_2],
+        )
+
+        self.assertEqual(record.label_type, "forwarder")
+        self.assertEqual(record.filename_info.factory_name, "晟通")
+        self.assertEqual(record.logistics_code, "FASA202605228410S")
+        self.assertEqual(record.destination_country, "沙特")
+        self.assertEqual(record.warehouse, "JED4")
+        self.assertEqual(record.fba_code, "FBA15LSJCSYS")
+        self.assertEqual(record.box_count, 2)
+        self.assertEqual(record.shipment_total_boxes, 140)
+        self.assertFalse(record.is_single_sku)
+        self.assertEqual(record.sku, "")
+        self.assertEqual(record.product_name, "")
+        self.assertEqual(record.notes, ())
+        self.assertTrue(record.is_valid)
+        self.assertEqual(
+            build_suggested_filename(record),
+            "晟通-FASA202605228410S-2箱-JED4-FBA15LSJCSYS-沙特.pdf",
+        )
 
     def test_filename_comparison_marks_total_mismatch(self):
         record = parse_label_text(
@@ -155,6 +210,33 @@ class ShipmentPdfParsingTest(unittest.TestCase):
             self.assertEqual(len(packaged["packages"]), 2)
             self.assertTrue((root / "outputs" / "batch001-factory-packages" / "鹏鑫达-batch001.zip").exists())
             self.assertTrue((root / "outputs" / "batch001-factory-packages" / "海达-batch001.zip").exists())
+
+    def test_scan_folder_finds_pdfs_recursively(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "top.pdf").write_text("pdf placeholder", encoding="utf-8")
+            (root / "notes.txt").write_text("skip", encoding="utf-8")
+            nested = root / "folder"
+            nested.mkdir()
+            (nested / "nested.PDF").write_text("pdf placeholder", encoding="utf-8")
+
+            with patch.object(shipment_batch, "extract_pdf", side_effect=lambda path: path.name):
+                records = shipment_batch.scan_folder(root)
+
+        self.assertEqual(records, ["nested.PDF", "top.pdf"])
+
+    def test_upload_paths_are_sanitized_and_deduplicated(self):
+        self.assertEqual(
+            server._safe_upload_relative_path("批次/子目录/鹏鑫达:001.pdf"),
+            Path("批次/子目录/鹏鑫达001.pdf"),
+        )
+        self.assertEqual(server._safe_upload_relative_path("../../bad?.pdf"), Path("bad.pdf"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "same.pdf"
+            target.write_text("existing", encoding="utf-8")
+
+            self.assertEqual(server._unique_upload_target(target).name, "same-2.pdf")
 
 
 if __name__ == "__main__":

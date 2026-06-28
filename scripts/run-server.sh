@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+PID_FILE="$ROOT_DIR/data/server.pid"
+
+mkdir -p "$ROOT_DIR/data"
+echo "$$" > "$PID_FILE"
+
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  PYTHON="$ROOT_DIR/.venv/bin/python"
+elif [[ -x "/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3" ]]; then
+  PYTHON="/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
+else
+  PYTHON="${PYTHON:-python3}"
+fi
+
+ARGS=()
+if [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then
+  ARGS+=(--host "$AMAZON_TOOLBOX_HOST")
+fi
+if [[ -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
+  ARGS+=(--port "$AMAZON_TOOLBOX_PORT")
+fi
+
+exec "$PYTHON" -m app.amazon_toolbox.server "${ARGS[@]}"

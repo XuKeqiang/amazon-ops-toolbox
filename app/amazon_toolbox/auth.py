@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import secrets
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -77,6 +78,24 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
+def normalize_password(password: str) -> str:
+    normalized = unicodedata.normalize("NFKC", password)
+    cleaned = "".join(
+        char for char in normalized
+        if not _is_ignored_login_char(char)
+    )
+    return cleaned.strip()
+
+
+def _is_ignored_login_char(char: str) -> bool:
+    codepoint = ord(char)
+    return (
+        unicodedata.category(char).startswith("C")
+        or 0xFE00 <= codepoint <= 0xFE0F
+        or 0xE0100 <= codepoint <= 0xE01EF
+    )
+
+
 def validate_role(role: str) -> str:
     return role if role in {"admin", "operator"} else "operator"
 
@@ -91,7 +110,12 @@ def find_user_by_username(users: list[dict], username: str) -> dict | None:
 
 
 def normalize_username(username: str) -> str:
-    return username.strip().lower()
+    normalized = unicodedata.normalize("NFKC", username)
+    cleaned = "".join(
+        char for char in normalized
+        if not _is_ignored_login_char(char)
+    )
+    return cleaned.strip().lower()
 
 
 def _now_label() -> str:

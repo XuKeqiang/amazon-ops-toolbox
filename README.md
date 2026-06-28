@@ -1,6 +1,6 @@
 # Amazon Operations Toolbox
 
-内部亚马逊经营数据工具箱。当前阶段实现货件外箱标 PDF 的批量识别、文件名核验、导出、按工厂打包，以及交易报告 PDF 的结构化提取；后续可扩展交易明细 CSV、持久化历史任务和更多导入导出能力。
+内部亚马逊经营数据工具箱。当前阶段实现货件外箱标 PDF 的批量识别、文件名核验、导出、按工厂打包，交易报告 PDF 的结构化提取，以及交易明细 CSV/XLSX 的汇总清洗。
 
 ## 当前能力
 
@@ -15,6 +15,10 @@
 - 支持上传 PDF 或扫描项目目录内的服务器文件夹。
 - 支持管理员/操作员登录；管理员可管理用户。
 - 支持交易报告 PDF 批量提取并导出 Excel。
+- 支持交易明细 CSV/XLSX 批量清洗、汇总和审计导出。
+- 使用 SQLite 持久化历史任务、导出记录和操作日志。
+- 支持配置化端口、允许扫描目录、上传大小限制。
+- 提供内网部署、开机自启动和每日备份脚本。
 
 ## 安装依赖
 
@@ -24,10 +28,25 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-## 启动 Web 工具
+## 配置与启动
+
+复制配置文件：
 
 ```bash
-/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m app.amazon_toolbox.server --host 0.0.0.0 --port 8080
+cp config/app-config.example.json config/app-config.json
+```
+
+根据公司服务器调整 `config/app-config.json`：
+
+- `server.host`：内网访问建议为 `0.0.0.0`。
+- `server.port`：默认 `8080`。
+- `paths.allowed_input_roots`：允许扫描的服务器目录白名单。
+- `limits.max_upload_mb`：单次上传大小限制。
+
+启动 Web 工具：
+
+```bash
+bash scripts/start.sh
 ```
 
 本机访问：
@@ -79,21 +98,20 @@ git push -u origin main
 
 ## 服务器部署建议
 
-第一阶段可以直接在公司机器上运行 Python 服务。建议目录结构：
+第一阶段可以直接在公司机器上运行 Python 服务。详细说明见：
 
 ```text
-Amazon_Data_Management/
-  app/
-  docs/
-  tests/
-  data/
-    uploads/
-    outputs/
+docs/lan-deployment.md
 ```
 
-后续增强：
+macOS 服务器电脑上安装开机自启动和每日备份：
 
-- 用 SQLite 保存历史任务、操作者、导出记录和重命名日志。
-- 加 Dockerfile，把启动命令固化成容器服务。
-- 加反向代理和公司内网访问控制。
-- 为 `transaction_pdf`、`transaction_csv` 增加独立解析模块，复用当前批次结果和导出界面。
+```bash
+bash scripts/install-launchd.sh
+```
+
+手动备份：
+
+```bash
+bash scripts/backup.sh
+```
