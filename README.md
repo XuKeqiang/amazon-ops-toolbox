@@ -10,7 +10,7 @@
 
 ## 零基础部署步骤
 
-下面以 macOS 公司电脑为例。目标是：这台电脑作为服务器，其他同事通过局域网浏览器访问。
+下面分别给出 macOS 和 Windows 的部署方式。目标是：选一台公司电脑作为服务器，其他同事通过局域网浏览器访问。
 
 ### 1. 准备一台服务器电脑
 
@@ -22,24 +22,39 @@
 
 ### 2. 安装基础软件
 
-打开“终端”应用，先检查是否已经安装 Git 和 Python：
+macOS 打开“终端”，Windows 打开“PowerShell”，先检查是否已经安装 Git 和 Python：
 
 ```bash
 git --version
 python3 --version
 ```
 
+Windows 如果 `python3 --version` 没反应，也可以试：
+
+```powershell
+python --version
+```
+
 如果提示找不到 `git` 或 `python3`：
 
 - Git：可以安装 Xcode Command Line Tools，终端里执行 `xcode-select --install`。
-- Python：建议安装 Python 3.11 或 3.12。
+- Windows Git：安装 [Git for Windows](https://git-scm.com/download/win)。
+- Python：建议安装 Python 3.11 或 3.12。Windows 安装时勾选 “Add python.exe to PATH”。
 
 ### 3. 拉取项目代码
 
-选择一个固定目录存放项目，例如 `Documents`：
+macOS：
 
 ```bash
 cd ~/Documents
+git clone https://github.com/XuKeqiang/amazon-ops-toolbox.git
+cd amazon-ops-toolbox
+```
+
+Windows PowerShell：
+
+```powershell
+cd $HOME\Documents
 git clone https://github.com/XuKeqiang/amazon-ops-toolbox.git
 cd amazon-ops-toolbox
 ```
@@ -50,10 +65,20 @@ cd amazon-ops-toolbox
 
 第一次部署需要创建虚拟环境并安装依赖：
 
+macOS：
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
+```
+
+Windows PowerShell：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 如果安装过程没有报错，就可以进入下一步。
@@ -62,8 +87,16 @@ python3 -m venv .venv
 
 复制一份配置模板：
 
+macOS：
+
 ```bash
 cp config/app-config.example.json config/app-config.json
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item config\app-config.example.json config\app-config.json
 ```
 
 打开 `config/app-config.json`，重点检查：
@@ -73,14 +106,31 @@ cp config/app-config.example.json config/app-config.json
 - `paths.allowed_input_roots`：允许系统扫描的服务器文件夹白名单。
 - `limits.max_upload_mb`：单次上传大小限制。
 
+Windows 路径建议在配置里写成这种形式：
+
+```json
+"allowed_input_roots": [
+  "C:/AmazonData",
+  "D:/Operations/Amazon"
+]
+```
+
 如果不确定怎么改，先保持默认配置也可以启动。
 
 ### 6. 设置管理员初始密码
 
 第一次启动前，建议设置一个正式管理员密码：
 
+macOS：
+
 ```bash
 export AMAZON_TOOLBOX_ADMIN_PASSWORD='换成你的强密码'
+```
+
+Windows PowerShell：
+
+```powershell
+$env:AMAZON_TOOLBOX_ADMIN_PASSWORD = "换成你的强密码"
 ```
 
 如果没有设置，默认管理员账号是：
@@ -94,8 +144,16 @@ export AMAZON_TOOLBOX_ADMIN_PASSWORD='换成你的强密码'
 
 ### 7. 启动服务
 
+macOS：
+
 ```bash
 bash scripts/start.sh
+```
+
+Windows PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
 看到类似 “started with PID ...” 就表示服务已经启动。
@@ -114,24 +172,48 @@ http://服务器电脑的局域网IP:8080/
 
 查看本机局域网 IP：
 
+macOS：
+
 ```bash
 ipconfig getifaddr en0
 ```
 
-如果这条命令没有输出，可以到 macOS “系统设置 → 网络”里查看当前网络的 IP 地址。
+Windows PowerShell：
+
+```powershell
+ipconfig
+```
+
+Windows 输出里找当前网络下的 `IPv4 地址`。macOS 如果 `ipconfig getifaddr en0` 没有输出，可以到“系统设置 → 网络”里查看当前网络的 IP 地址。
 
 ### 8. 停止服务
 
+macOS：
+
 ```bash
 bash scripts/stop.sh
+```
+
+Windows PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
 ```
 
 ### 9. 设置开机自启动和每日备份
 
 确认系统能正常打开后，再执行：
 
+macOS：
+
 ```bash
 bash scripts/install-launchd.sh
+```
+
+Windows PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows-task.ps1
 ```
 
 安装后：
@@ -142,8 +224,16 @@ bash scripts/install-launchd.sh
 
 也可以手动备份：
 
+macOS：
+
 ```bash
 bash scripts/backup.sh
+```
+
+Windows PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup.ps1
 ```
 
 ## 怎么打开和使用
@@ -160,9 +250,18 @@ bash scripts/backup.sh
 
 当 GitHub 仓库有新版本时，在服务器电脑执行：
 
+macOS：
+
 ```bash
 cd ~/Documents/amazon-ops-toolbox
 bash scripts/update.sh
+```
+
+Windows PowerShell：
+
+```powershell
+cd $HOME\Documents\amazon-ops-toolbox
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\update.ps1
 ```
 
 它会自动：
@@ -192,8 +291,17 @@ curl http://127.0.0.1:8080/api/health
 
 如果打不开，查看日志：
 
+macOS：
+
 ```bash
 tail -n 80 data/logs/server.log
+```
+
+Windows PowerShell：
+
+```powershell
+Get-Content data\logs\server.err.log -Tail 80
+Get-Content data\logs\server.out.log -Tail 80
 ```
 
 ### 同事电脑访问不了
@@ -202,7 +310,7 @@ tail -n 80 data/logs/server.log
 
 - 服务器电脑和同事电脑是否在同一个局域网。
 - `config/app-config.json` 里的 `server.host` 是否是 `0.0.0.0`。
-- macOS 防火墙是否允许访问 `8080` 端口。
+- macOS 或 Windows 防火墙是否允许访问 `8080` 端口。
 - 同事访问的是 `http://服务器局域网IP:8080/`，不是 `127.0.0.1`。
 
 ### 登录失败
@@ -222,9 +330,18 @@ tail -n 80 data/logs/server.log
 
 系统只允许扫描 `config/app-config.json` 里 `paths.allowed_input_roots` 配置的目录。把业务文件夹加入白名单后，重启服务：
 
+macOS：
+
 ```bash
 bash scripts/stop.sh
 bash scripts/start.sh
+```
+
+Windows PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
 ## 当前能力
