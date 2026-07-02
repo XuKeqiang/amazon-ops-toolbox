@@ -16,12 +16,12 @@ else
   PYTHON="${PYTHON:-python3}"
 fi
 
-ARGS=()
-if [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then
-  ARGS+=(--host "$AMAZON_TOOLBOX_HOST")
+if [[ -n "${AMAZON_TOOLBOX_HOST:-}" && -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
+  exec "$PYTHON" -m app.amazon_toolbox.server --host "$AMAZON_TOOLBOX_HOST" --port "$AMAZON_TOOLBOX_PORT"
+elif [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then
+  exec "$PYTHON" -m app.amazon_toolbox.server --host "$AMAZON_TOOLBOX_HOST"
+elif [[ -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
+  exec "$PYTHON" -m app.amazon_toolbox.server --port "$AMAZON_TOOLBOX_PORT"
+else
+  exec "$PYTHON" -m app.amazon_toolbox.server
 fi
-if [[ -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
-  ARGS+=(--port "$AMAZON_TOOLBOX_PORT")
-fi
-
-exec "$PYTHON" -m app.amazon_toolbox.server "${ARGS[@]}"
