@@ -31,6 +31,7 @@ from .auth import (
     verify_password,
 )
 from .config import APP_ROOT, PROJECT_ROOT, STATIC_ROOT, load_config
+from .port_fee_pdf.batch import PortFeePdfJob, process_port_fee_folder
 from .report_pdf.batch import ReportPdfJob, preflight_report_folder, process_report_folder
 from .shipment_pdf.batch import (
     apply_renames,
@@ -53,6 +54,7 @@ from .storage import (
     update_task_downloads,
 )
 from .transaction_csv.batch import TransactionCsvJob, process_transaction_folder
+from .walmart_transaction.batch import WalmartTransactionJob, process_walmart_transaction_folder
 
 
 CONFIG = load_config()
@@ -77,6 +79,8 @@ class BatchState:
 BATCHES: dict[str, BatchState] = {}
 REPORT_JOBS: dict[str, ReportPdfJob] = {}
 TRANSACTION_JOBS: dict[str, TransactionCsvJob] = {}
+WALMART_TRANSACTION_JOBS: dict[str, WalmartTransactionJob] = {}
+PORT_FEE_JOBS: dict[str, PortFeePdfJob] = {}
 SESSIONS: dict[str, str] = {}
 REPORT_PREFLIGHTS: dict[str, Path] = {}
 SHIPMENT_PACKAGES: dict[str, list[dict]] = {}
@@ -109,6 +113,10 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_report_download(parse_qs(parsed.query))
         elif parsed.path == "/api/transaction-csv/download":
             self._handle_transaction_download(parse_qs(parsed.query))
+        elif parsed.path == "/api/walmart-transaction/download":
+            self._handle_walmart_transaction_download(parse_qs(parsed.query))
+        elif parsed.path == "/api/port-fee-pdf/download":
+            self._handle_port_fee_download(parse_qs(parsed.query))
         elif parsed.path == "/api/shipment-package/download":
             self._handle_shipment_package_download(parse_qs(parsed.query))
         elif parsed.path == "/api/shipment-package/download-all":
@@ -140,6 +148,12 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_report_upload()
         elif parsed.path == "/api/transaction-csv/process-folder":
             self._handle_transaction_process_folder()
+        elif parsed.path == "/api/walmart-transaction/process-folder":
+            self._handle_walmart_transaction_process_folder()
+        elif parsed.path == "/api/port-fee-pdf/process-folder":
+            self._handle_port_fee_process_folder()
+        elif parsed.path == "/api/port-fee-pdf/upload":
+            self._handle_port_fee_upload()
         elif parsed.path == "/api/upload":
             self._handle_upload()
         elif parsed.path == "/api/rename":
@@ -791,6 +805,186 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         )
         self._send_json(_transaction_job_payload(job))
 
+    def _handle_walmart_transaction_process_folder(self) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        payload = self._read_json()
+        folder_text = str(payload.get("folder", "")).strip()
+        if not folder_text:
+            self._send_json({"error": "请提供服务器上的沃尔玛财务报表文件夹路径"}, status=400)
+            return
+
+        folder = _resolve_allowed_folder(folder_text)
+        if folder is None:
+            self._send_json({"error": f"为了安全，当前只允许扫描这些目录：{_allowed_roots_label()}"}, status=400)
+            return
+        if not folder.exists() or not folder.is_dir():
+            self._send_json({"error": "文件夹不存在或不是有效目录"}, status=400)
+            return
+
+        job_id = _new_batch_id()
+        output_dir = OUTPUT_ROOT / f"{job_id}-walmart-transaction"
+        job = process_walmart_transaction_folder(folder, output_dir, job_id, label=folder.name)
+        WALMART_TRANSACTION_JOBS[job.job_id] = job
+        status = "需复核" if job.summary.get("warnings") or job.summary.get("unmapped_values") else "完成"
+        _record_history(
+            task_id=job.job_id,
+            task_type="walmart_transaction",
+            title="沃尔玛交易数据",
+            source_label=job.source_label,
+            summary=job.summary,
+            status=status,
+            downloads=[
+                {"label": "经营数据总表", "url": f"/api/walmart-transaction/download?job_id={job.job_id}&file=total"},
+                {"label": "清洗审计", "url": f"/api/walmart-transaction/download?job_id={job.job_id}&file=audit"},
+            ],
+            owner=user,
+        )
+        record_operation(
+            DATABASE_PATH,
+            operation="walmart_transaction_process_folder",
+            owner=user,
+            target_id=job.job_id,
+            target_type="walmart_transaction",
+            message=f"处理沃尔玛财务报表文件夹：{folder}",
+            payload=job.summary,
+        )
+        self._send_json(_walmart_transaction_job_payload(job))
+
+    def _handle_port_fee_process_folder(self) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        payload = self._read_json()
+        folder_text = str(payload.get("folder", "")).strip()
+        if not folder_text:
+            self._send_json({"error": "请提供服务器上的港杂费发票 PDF 文件夹路径"}, status=400)
+            return
+
+        folder = _resolve_allowed_folder(folder_text)
+        if folder is None:
+            self._send_json({"error": f"为了安全，当前只允许扫描这些目录：{_allowed_roots_label()}"}, status=400)
+            return
+        if not folder.exists() or not folder.is_dir():
+            self._send_json({"error": "文件夹不存在或不是有效目录"}, status=400)
+            return
+
+        self._process_port_fee_folder_for_user(folder, user)
+
+    def _handle_port_fee_upload(self) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        content_length = int(self.headers.get("Content-Length", "0") or "0")
+        if content_length > CONFIG.max_upload_bytes:
+            self._send_json(
+                {"error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB"},
+                status=413,
+            )
+            return
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            self._send_json({"error": "请上传 multipart/form-data 文件"}, status=400)
+            return
+
+        job_id = _new_batch_id()
+        upload_dir = UPLOAD_ROOT / f"{job_id}-port-fee-pdf"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+            },
+        )
+
+        received = saved = skipped = renamed = 0
+        skipped_paths: list[str] = []
+        files = form["files"] if "files" in form else []
+        if not isinstance(files, list):
+            files = [files]
+        for item in files:
+            received += 1
+            raw_filename = getattr(item, "filename", "")
+            upload_path = _safe_upload_relative_path(raw_filename)
+            if upload_path is None or upload_path.suffix.lower() != ".pdf":
+                skipped += 1
+                skipped_paths.append(_upload_display_path(raw_filename))
+                continue
+            target = _unique_upload_target(upload_dir / upload_path)
+            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
+                renamed += 1
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("wb") as handle:
+                shutil.copyfileobj(item.file, handle)
+            saved += 1
+
+        if saved == 0:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            self._send_json({
+                "error": "没有收到 PDF 文件",
+                "received": received,
+                "saved": saved,
+                "skipped": skipped,
+                "skipped_paths": skipped_paths,
+            }, status=400)
+            return
+
+        self._process_port_fee_folder_for_user(
+            upload_dir,
+            user,
+            source_label=f"上传批次 {job_id}",
+            job_id=job_id,
+            upload_summary={
+                "received": received,
+                "saved": saved,
+                "skipped": skipped,
+                "skipped_paths": skipped_paths,
+                "renamed": renamed,
+            },
+        )
+
+    def _process_port_fee_folder_for_user(
+        self,
+        folder: Path,
+        user: dict,
+        source_label: str | None = None,
+        job_id: str | None = None,
+        upload_summary: dict | None = None,
+    ) -> None:
+        job_id = job_id or _new_batch_id()
+        output_dir = OUTPUT_ROOT / f"{job_id}-port-fee-pdf"
+        job = process_port_fee_folder(folder, output_dir, job_id, label=source_label or folder.name)
+        if source_label:
+            job.source_label = source_label
+        if upload_summary:
+            job.summary.update(upload_summary)
+        PORT_FEE_JOBS[job.job_id] = job
+        status = "需复核" if job.summary.get("warnings") or job.summary.get("failed") else "完成"
+        _record_history(
+            task_id=job.job_id,
+            task_type="port_fee_pdf",
+            title="港杂费 PDF",
+            source_label=job.source_label,
+            summary=job.summary,
+            status=status,
+            downloads=[{"label": "Excel 工作簿", "url": f"/api/port-fee-pdf/download?job_id={job.job_id}"}],
+            owner=user,
+        )
+        record_operation(
+            DATABASE_PATH,
+            operation="port_fee_pdf_process",
+            owner=user,
+            target_id=job.job_id,
+            target_type="port_fee_pdf",
+            message=f"处理港杂费发票 PDF：{job.source_label}",
+            payload=job.summary,
+        )
+        self._send_json(_port_fee_job_payload(job))
+
     def _handle_upload(self) -> None:
         user = self._require_auth()
         if not user:
@@ -998,6 +1192,62 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         )
         self._send_download(path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
+    def _handle_walmart_transaction_download(self, query: dict[str, list[str]]) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        job_id = _first_query(query, "job_id")
+        file_key = _first_query(query, "file") or "total"
+        job = WALMART_TRANSACTION_JOBS.get(job_id)
+        history_item = get_task(DATABASE_PATH, job_id)
+        if history_item and not _can_access_owner(user, history_item.get("owner_id", "")):
+            self._send_json({"error": "没有权限下载该任务"}, status=403)
+            return
+        if job:
+            path = job.audit_path if file_key == "audit" else job.total_path
+        else:
+            filename_key = "audit_filename" if file_key == "audit" else "output_filename"
+            filename = (history_item or {}).get("summary", {}).get(filename_key, "")
+            path = OUTPUT_ROOT / f"{job_id}-walmart-transaction" / filename
+        if not path.is_file():
+            self._send_json({"error": "导出文件不存在，请重新处理该任务"}, status=404)
+            return
+        record_export(
+            DATABASE_PATH,
+            task_id=job_id,
+            export_type=f"walmart_transaction_{file_key}",
+            file_path=path,
+            owner=user,
+        )
+        self._send_download(path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def _handle_port_fee_download(self, query: dict[str, list[str]]) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        job_id = _first_query(query, "job_id")
+        job = PORT_FEE_JOBS.get(job_id)
+        history_item = get_task(DATABASE_PATH, job_id)
+        if history_item and not _can_access_owner(user, history_item.get("owner_id", "")):
+            self._send_json({"error": "没有权限下载该任务"}, status=403)
+            return
+        if job:
+            output_path = job.output_path
+        else:
+            filename = (history_item or {}).get("summary", {}).get("output_filename", "")
+            output_path = OUTPUT_ROOT / f"{job_id}-port-fee-pdf" / filename
+        if not output_path.is_file():
+            self._send_json({"error": "导出文件不存在，请重新处理该任务"}, status=404)
+            return
+        record_export(
+            DATABASE_PATH,
+            task_id=job_id,
+            export_type="port_fee_pdf_xlsx",
+            file_path=output_path,
+            owner=user,
+        )
+        self._send_download(output_path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     def _handle_shipment_package_download(self, query: dict[str, list[str]]) -> None:
         user = self._require_auth()
         if not user:
@@ -1146,7 +1396,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "没有权限打包该批次"}, status=403)
             return
         if not confirm:
-            self._send_json({"error": "按工厂打包需要 confirm=true"}, status=400)
+            self._send_json({"error": "按工厂/国家打包需要 confirm=true"}, status=400)
             return
 
         OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -1164,7 +1414,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         SHIPMENT_PACKAGES[batch.batch_id] = packages
         bundle = _build_shipment_package_bundle(batch.batch_id, packages, result["package_root"])
         SHIPMENT_PACKAGE_BUNDLES[batch.batch_id] = bundle
-        all_download = [{"label": "全部工厂压缩包", "url": bundle["download_url"]}] if bundle else []
+        all_download = [{"label": "全部工厂/国家压缩包", "url": bundle["download_url"]}] if bundle else []
         _update_history_downloads(
             batch.batch_id,
             all_download + [{"label": f"{item['factory_name']} 压缩包", "url": item["download_url"]} for item in packages],
@@ -1175,7 +1425,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             owner=user,
             target_id=batch.batch_id,
             target_type="shipment_pdf",
-            message="按工厂打包货件 PDF",
+            message="按工厂/国家打包货件 PDF",
             payload={"packages": len(packages), "skipped": result["skipped"]},
         )
         self._send_json(
@@ -1414,6 +1664,29 @@ def _transaction_job_payload(job: TransactionCsvJob) -> dict:
     }
 
 
+def _walmart_transaction_job_payload(job: WalmartTransactionJob) -> dict:
+    return {
+        "job_id": job.job_id,
+        "source_label": job.source_label,
+        "summary": job.summary,
+        "rows": job.rows,
+        "download_url": f"/api/walmart-transaction/download?job_id={job.job_id}&file=total",
+        "audit_download_url": f"/api/walmart-transaction/download?job_id={job.job_id}&file=audit",
+    }
+
+
+def _port_fee_job_payload(job: PortFeePdfJob) -> dict:
+    return {
+        "job_id": job.job_id,
+        "source_label": job.source_label,
+        "summary": job.summary,
+        "rows": job.rows,
+        "details": job.details,
+        "skipped_paths": job.summary.get("skipped_paths", []),
+        "download_url": f"/api/port-fee-pdf/download?job_id={job.job_id}",
+    }
+
+
 def _history_payload(user: dict) -> dict:
     tasks = [_task_with_available_downloads(task) for task in list_tasks(DATABASE_PATH, user)]
     return {
@@ -1423,6 +1696,8 @@ def _history_payload(user: dict) -> dict:
             "shipment_pdf": sum(1 for task in tasks if task["type"] == "shipment_pdf"),
             "report_pdf": sum(1 for task in tasks if task["type"] == "report_pdf"),
             "transaction_csv": sum(1 for task in tasks if task["type"] == "transaction_csv"),
+            "walmart_transaction": sum(1 for task in tasks if task["type"] == "walmart_transaction"),
+            "port_fee_pdf": sum(1 for task in tasks if task["type"] == "port_fee_pdf"),
             "needs_review": sum(1 for task in tasks if task["status"] == "需复核"),
         },
     }
@@ -1461,7 +1736,7 @@ def _task_with_available_downloads(task: dict) -> dict:
             )
         all_url = f"/api/shipment-package/download-all?batch_id={task_id}"
         if bundle_path.is_file() and all_url not in existing_urls:
-            downloads.append({"label": "全部工厂压缩包", "url": all_url})
+            downloads.append({"label": "全部工厂/国家压缩包", "url": all_url})
             existing_urls.add(all_url)
         for path in package_paths:
             url = f"/api/shipment-package/download?batch_id={task_id}&filename={quote(path.name)}"
@@ -1504,6 +1779,8 @@ def _settings_payload(server_address: tuple[str, int], user: dict) -> dict:
             {"name": "货件 PDF", "engine": "pdfplumber / pypdf 规则提取", "llm": "不依赖"},
             {"name": "汇总报告 PDF", "engine": "pdfplumber 表格结构解析 + 对账校验", "llm": "不依赖"},
             {"name": "交易明细 CSV/XLSX", "engine": "openpyxl / csv 规则清洗、字段翻译、记录类型分类", "llm": "不依赖"},
+            {"name": "港杂费 PDF", "engine": "pdfplumber 文本坐标解析 + 金额合计校验", "llm": "不依赖"},
+            {"name": "沃尔玛交易数据", "engine": "openpyxl 表头映射、字段翻译、汇率换算、审计输出", "llm": "不依赖"},
         ],
         "exports": ["CSV", "Excel"],
         "deployment_notes": [
@@ -1679,6 +1956,13 @@ def _remove_task_artifacts(task: dict) -> int:
         ])
     elif task_type == "transaction_csv":
         candidates.append(OUTPUT_ROOT / f"{task_id}-transaction-csv")
+    elif task_type == "walmart_transaction":
+        candidates.append(OUTPUT_ROOT / f"{task_id}-walmart-transaction")
+    elif task_type == "port_fee_pdf":
+        candidates.extend([
+            OUTPUT_ROOT / f"{task_id}-port-fee-pdf",
+            UPLOAD_ROOT / f"{task_id}-port-fee-pdf",
+        ])
 
     removed = 0
     for path in candidates:

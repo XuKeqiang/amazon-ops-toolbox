@@ -12,6 +12,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = APP_ROOT / "static"
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "app-config.json"
 LEGACY_REPORT_ROOT = Path("/Users/xukeqiang/Documents/Amazon_Data_Process")
+DEFAULT_DOWNLOAD_ROOT = Path("/Users/xukeqiang/Downloads")
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
 
     allowed_values = paths.get("allowed_input_roots")
     if not allowed_values:
-        allowed_values = [str(PROJECT_ROOT), str(LEGACY_REPORT_ROOT)]
+        allowed_values = [str(PROJECT_ROOT), str(LEGACY_REPORT_ROOT), str(DEFAULT_DOWNLOAD_ROOT)]
     allowed_input_roots = tuple(_resolve_path(value).resolve() for value in allowed_values)
 
     return AppConfig(

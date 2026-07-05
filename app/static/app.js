@@ -3,6 +3,8 @@ const state = {
   records: [],
   reportJobId: "",
   transactionJobId: "",
+  walmartTransactionJobId: "",
+  portFeeJobId: "",
   activeView: "shipment",
   currentUser: null,
   shipmentFilters: {
@@ -24,8 +26,11 @@ const state = {
   selectedHistoryTaskIds: new Set(),
   pendingShipmentFiles: [],
   pendingReportFiles: [],
+  pendingPortFeeFiles: [],
   reportRows: [],
   transactionRows: [],
+  walmartTransactionRows: [],
+  portFeeRows: [],
   reportReviewFilter: "all",
   reportFilters: {
     query: "",
@@ -39,12 +44,18 @@ const state = {
   shipmentBusy: false,
   reportBusy: false,
   transactionBusy: false,
+  walmartTransactionBusy: false,
+  portFeeBusy: false,
   shipmentAbortController: null,
   reportAbortController: null,
   transactionAbortController: null,
+  walmartTransactionAbortController: null,
+  portFeeAbortController: null,
   lastShipmentTask: null,
   lastReportTask: null,
   lastTransactionTask: null,
+  lastWalmartTransactionTask: null,
+  lastPortFeeTask: null,
 };
 
 const els = {
@@ -147,6 +158,46 @@ const els = {
   cancelTransactionTask: document.querySelector("#cancelTransactionTask"),
   retryTransactionTask: document.querySelector("#retryTransactionTask"),
   clearTransactionResult: document.querySelector("#clearTransactionResult"),
+  walmartTransactionFolderForm: document.querySelector("#walmartTransactionFolderForm"),
+  walmartTransactionFolderInput: document.querySelector("#walmartTransactionFolderInput"),
+  walmartTransactionSubmitButton: document.querySelector('#walmartTransactionFolderForm button[type="submit"]'),
+  walmartTransactionFilesMetric: document.querySelector("#walmartTransactionFilesMetric"),
+  walmartTransactionRowsMetric: document.querySelector("#walmartTransactionRowsMetric"),
+  walmartTransactionPeriodsMetric: document.querySelector("#walmartTransactionPeriodsMetric"),
+  walmartTransactionWarningsMetric: document.querySelector("#walmartTransactionWarningsMetric"),
+  walmartTransactionBatchLabel: document.querySelector("#walmartTransactionBatchLabel"),
+  walmartTransactionStatusText: document.querySelector("#walmartTransactionStatusText"),
+  walmartTransactionLogList: document.querySelector("#walmartTransactionLogList"),
+  walmartTransactionResultBody: document.querySelector("#walmartTransactionResultBody"),
+  walmartTransactionDownload: document.querySelector("#walmartTransactionDownload"),
+  walmartTransactionAuditDownload: document.querySelector("#walmartTransactionAuditDownload"),
+  newWalmartTransactionTask: document.querySelector("#newWalmartTransactionTask"),
+  cancelWalmartTransactionTask: document.querySelector("#cancelWalmartTransactionTask"),
+  retryWalmartTransactionTask: document.querySelector("#retryWalmartTransactionTask"),
+  clearWalmartTransactionResult: document.querySelector("#clearWalmartTransactionResult"),
+  portFeeUploadForm: document.querySelector("#portFeeUploadForm"),
+  portFeeFileInput: document.querySelector("#portFeeFileInput"),
+  portFeeFolderUploadInput: document.querySelector("#portFeeFolderUploadInput"),
+  portFeeDropTarget: document.querySelector("#portFeeDropTarget"),
+  portFeeUploadSelectionText: document.querySelector("#portFeeUploadSelectionText"),
+  portFeeUploadPickers: document.querySelectorAll("[data-port-fee-upload-picker]"),
+  portFeeFolderForm: document.querySelector("#portFeeFolderForm"),
+  portFeeFolderInput: document.querySelector("#portFeeFolderInput"),
+  portFeeFolderSubmitButton: document.querySelector('#portFeeFolderForm button[type="submit"]'),
+  portFeeUploadSubmitButton: document.querySelector('#portFeeUploadForm button[type="submit"]'),
+  portFeeFilesMetric: document.querySelector("#portFeeFilesMetric"),
+  portFeeRowsMetric: document.querySelector("#portFeeRowsMetric"),
+  portFeeAmountMetric: document.querySelector("#portFeeAmountMetric"),
+  portFeeWarningsMetric: document.querySelector("#portFeeWarningsMetric"),
+  portFeeBatchLabel: document.querySelector("#portFeeBatchLabel"),
+  portFeeStatusText: document.querySelector("#portFeeStatusText"),
+  portFeeLogList: document.querySelector("#portFeeLogList"),
+  portFeeResultBody: document.querySelector("#portFeeResultBody"),
+  portFeeDownload: document.querySelector("#portFeeDownload"),
+  newPortFeeTask: document.querySelector("#newPortFeeTask"),
+  cancelPortFeeTask: document.querySelector("#cancelPortFeeTask"),
+  retryPortFeeTask: document.querySelector("#retryPortFeeTask"),
+  clearPortFeeResult: document.querySelector("#clearPortFeeResult"),
   openHistoryButtons: document.querySelectorAll("[data-open-history]"),
   refreshHistoryButton: document.querySelector("#refreshHistoryButton"),
   cleanupHistoryButton: document.querySelector("#cleanupHistoryButton"),
@@ -163,6 +214,8 @@ const els = {
   historyShipmentMetric: document.querySelector("#historyShipmentMetric"),
   historyReportMetric: document.querySelector("#historyReportMetric"),
   historyTransactionMetric: document.querySelector("#historyTransactionMetric"),
+  historyWalmartTransactionMetric: document.querySelector("#historyWalmartTransactionMetric"),
+  historyPortFeeMetric: document.querySelector("#historyPortFeeMetric"),
   historyReviewMetric: document.querySelector("#historyReviewMetric"),
   historyStatusText: document.querySelector("#historyStatusText"),
   historyResultBody: document.querySelector("#historyResultBody"),
@@ -188,6 +241,8 @@ const hashByView = {
   shipment: "shipment",
   report: "report-pdf",
   transaction: "transaction-csv",
+  walmartTransaction: "walmart-transaction",
+  portFee: "port-fee",
   history: "history",
   settings: "settings",
 };
@@ -650,6 +705,208 @@ els.clearTransactionResult.addEventListener("click", () => {
   clearTransactionResults({ resetInput: false });
 });
 
+els.walmartTransactionFolderForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.walmartTransactionBusy) return;
+  state.lastWalmartTransactionTask = () => els.walmartTransactionFolderForm.requestSubmit();
+  resetWalmartTransactionLogs("准备读取沃尔玛财务报表文件夹...");
+  addWalmartTransactionLog(`服务器文件夹：${els.walmartTransactionFolderInput.value}`);
+  setWalmartTransactionBusy("正在清洗沃尔玛交易数据，并生成 Excel...");
+  disableWalmartTransactionDownloads();
+  const controller = new AbortController();
+  state.walmartTransactionAbortController = controller;
+  updateWalmartTransactionBusyControls();
+  try {
+    const response = await fetch("/api/walmart-transaction/process-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder: els.walmartTransactionFolderInput.value }),
+      signal: controller.signal,
+    });
+    await handleWalmartTransactionResponse(response);
+  } catch (error) {
+    if (isAbortError(error)) {
+      addWalmartTransactionLog("已终止当前清洗任务", "warning");
+      setWalmartTransactionStatus("已终止当前任务");
+      return;
+    }
+    addWalmartTransactionLog("处理请求失败，请确认服务仍在运行", "error");
+    setWalmartTransactionStatus("处理请求失败，请确认服务仍在运行");
+  } finally {
+    clearWalmartTransactionAbortController(controller);
+    setWalmartTransactionIdle();
+  }
+});
+
+els.cancelWalmartTransactionTask.addEventListener("click", () => {
+  cancelWalmartTransactionTask();
+});
+
+els.retryWalmartTransactionTask.addEventListener("click", () => {
+  retryWalmartTransactionTask();
+});
+
+els.newWalmartTransactionTask.addEventListener("click", () => {
+  startNewWalmartTransactionTask();
+});
+
+els.clearWalmartTransactionResult.addEventListener("click", () => {
+  clearWalmartTransactionResults({ resetInput: false });
+});
+
+els.portFeeUploadPickers.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (button.dataset.portFeeUploadPicker === "folder") {
+      els.portFeeFolderUploadInput.click();
+      return;
+    }
+    els.portFeeFileInput.click();
+  });
+});
+
+els.portFeeDropTarget.addEventListener("click", () => {
+  els.portFeeFileInput.click();
+});
+
+els.portFeeDropTarget.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  els.portFeeFileInput.click();
+});
+
+els.portFeeFileInput.addEventListener("change", () => {
+  resetPortFeeLogs("正在读取选择的 PDF 文件...");
+  setPendingPortFeeFiles([...els.portFeeFileInput.files].map((file) => ({ file, relativePath: file.name })), "已选择 PDF 文件");
+});
+
+els.portFeeFolderUploadInput.addEventListener("change", () => {
+  resetPortFeeLogs("正在读取选择的文件夹...");
+  setPendingPortFeeFiles(
+    [...els.portFeeFolderUploadInput.files].map((file) => ({
+      file,
+      relativePath: file.webkitRelativePath || file.name,
+    })),
+    "已选择文件夹",
+  );
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  els.portFeeUploadForm.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    els.portFeeUploadForm.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  els.portFeeUploadForm.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    if (eventName === "dragleave" && els.portFeeUploadForm.contains(event.relatedTarget)) return;
+    els.portFeeUploadForm.classList.remove("drag-over");
+  });
+});
+
+els.portFeeUploadForm.addEventListener("drop", async (event) => {
+  resetPortFeeLogs("正在读取拖放内容...");
+  const droppedFiles = await collectDroppedFiles(event.dataTransfer);
+  setPendingPortFeeFiles(droppedFiles, "已读取拖放内容");
+});
+
+els.portFeeFolderForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.portFeeBusy) return;
+  state.lastPortFeeTask = () => els.portFeeFolderForm.requestSubmit();
+  resetPortFeeLogs("准备扫描服务器文件夹...");
+  addPortFeeLog(`服务器文件夹：${els.portFeeFolderInput.value}`);
+  setPortFeeBusy("正在提取港杂费发票，并生成 Excel...");
+  disablePortFeeDownload();
+  const controller = new AbortController();
+  state.portFeeAbortController = controller;
+  updatePortFeeBusyControls();
+  try {
+    const response = await fetch("/api/port-fee-pdf/process-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder: els.portFeeFolderInput.value }),
+      signal: controller.signal,
+    });
+    await handlePortFeeResponse(response);
+  } catch (error) {
+    if (isAbortError(error)) {
+      addPortFeeLog("已终止当前提取任务", "warning");
+      setPortFeeStatus("已终止当前任务");
+      return;
+    }
+    addPortFeeLog("处理请求失败，请确认服务仍在运行", "error");
+    setPortFeeStatus("处理请求失败，请确认服务仍在运行");
+  } finally {
+    clearPortFeeAbortController(controller);
+    setPortFeeIdle();
+  }
+});
+
+els.portFeeUploadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.portFeeBusy) return;
+  const files = state.pendingPortFeeFiles;
+  if (!files.length) {
+    addPortFeeLog("请选择至少一个 PDF 文件或拖放一个文件夹", "warning");
+    setPortFeeStatus("请选择至少一个 PDF 文件或拖放一个文件夹");
+    return;
+  }
+  const pdfCount = files.filter((item) => isPdfFile(item.file)).length;
+  if (!pdfCount) {
+    addPortFeeLog("当前选择里没有 PDF 文件，请重新选择", "error");
+    setPortFeeStatus("当前选择里没有 PDF 文件，请重新选择");
+    return;
+  }
+
+  state.lastPortFeeTask = () => els.portFeeUploadForm.requestSubmit();
+  resetPortFeeLogs(`开始上传 ${files.length} 个文件，其中 ${pdfCount} 个 PDF`);
+  logSkippedNonPdfFiles(files, addPortFeeLog);
+  setPortFeeBusy(`正在上传并提取 ${pdfCount} 个港杂费发票 PDF...`);
+  disablePortFeeDownload();
+  const controller = new AbortController();
+  state.portFeeAbortController = controller;
+  updatePortFeeBusyControls();
+  const formData = new FormData();
+  files.forEach((item) => formData.append("files", item.file, item.relativePath || item.file.name));
+  try {
+    const response = await fetch("/api/port-fee-pdf/upload", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    await handlePortFeeResponse(response);
+  } catch (error) {
+    if (isAbortError(error)) {
+      addPortFeeLog("已终止当前上传提取任务", "warning");
+      setPortFeeStatus("已终止当前任务");
+      return;
+    }
+    addPortFeeLog("上传请求失败，请确认服务仍在运行", "error");
+    setPortFeeStatus("上传请求失败，请确认服务仍在运行");
+  } finally {
+    clearPortFeeAbortController(controller);
+    setPortFeeIdle();
+  }
+});
+
+els.cancelPortFeeTask.addEventListener("click", () => {
+  cancelPortFeeTask();
+});
+
+els.retryPortFeeTask.addEventListener("click", () => {
+  retryPortFeeTask();
+});
+
+els.newPortFeeTask.addEventListener("click", () => {
+  startNewPortFeeTask();
+});
+
+els.clearPortFeeResult.addEventListener("click", () => {
+  clearPortFeeResults({ resetInput: false });
+});
+
 els.refreshHistoryButton.addEventListener("click", () => {
   loadHistory();
 });
@@ -907,11 +1164,11 @@ els.packageButton.addEventListener("click", async () => {
   const reviewCount = state.records.filter((record) => !record.is_valid).length;
   const factoryCount = new Set(state.records.map((record) => record.filename_info.factory_name).filter(Boolean)).size;
   const message = reviewCount
-    ? `当前还有 ${reviewCount} 个文件需要复核。确认人工核对无误，并按 ${factoryCount} 个工厂打包原始 PDF？`
-    : `确认按 ${factoryCount} 个工厂打包原始 PDF？`;
+    ? `当前还有 ${reviewCount} 个文件需要复核。确认人工核对无误，并按 ${factoryCount} 个工厂打包，包内继续按国家分文件夹？`
+    : `确认按 ${factoryCount} 个工厂打包，包内继续按国家分文件夹？`;
   if (!window.confirm(message)) return;
 
-  setBusy("正在按工厂打包原始 PDF...");
+  setBusy("正在按工厂/国家打包原始 PDF...");
   els.packageButton.disabled = true;
   const response = await fetch("/api/package-by-factory", {
     method: "POST",
@@ -925,7 +1182,7 @@ els.packageButton.addEventListener("click", async () => {
     return;
   }
   renderPackageResult(payload);
-  setStatus(`打包完成：已生成 ${payload.packages.length} 个工厂压缩包，结果在识别表格下方。`);
+  setStatus(`打包完成：已生成 ${payload.packages.length} 个工厂压缩包，包内已按国家分文件夹。`);
   els.packageResult.scrollIntoView({ behavior: "smooth", block: "center" });
   if (state.activeView === "history") {
     loadHistory();
@@ -938,7 +1195,7 @@ window.addEventListener("hashchange", () => {
   setActiveView(viewFromHash());
 });
 
-if (!["", "#shipment", "#report-pdf", "#transaction-csv", "#history", "#settings"].includes(window.location.hash)) {
+if (!["", "#shipment", "#report-pdf", "#transaction-csv", "#walmart-transaction", "#port-fee", "#history", "#settings"].includes(window.location.hash)) {
   window.history.replaceState(null, "", "#shipment");
 }
 
@@ -963,6 +1220,8 @@ function applySession(user) {
   updateBusyControls();
   updateReportBusyControls();
   updateTransactionBusyControls();
+  updateWalmartTransactionBusyControls();
+  updatePortFeeBusyControls();
   setActiveView(viewFromHash());
 }
 
@@ -1095,6 +1354,65 @@ async function handleTransactionResponse(response) {
   }
 }
 
+async function handleWalmartTransactionResponse(response) {
+  const payload = await response.json();
+  if (response.status === 401) {
+    showLoggedOut();
+    return;
+  }
+  if (!response.ok) {
+    addWalmartTransactionLog(payload.error || "处理失败", "error");
+    setWalmartTransactionStatus(payload.error || "处理失败");
+    return;
+  }
+  state.walmartTransactionJobId = payload.job_id;
+  addWalmartTransactionLog(`文件读取完成：${payload.summary.source_files || 0} 个源工作簿，跳过 ${payload.summary.skipped_files || 0} 个非业务文件`);
+  addWalmartTransactionLog(`清洗完成：${payload.summary.output_rows || 0} 条明细，覆盖 ${payload.summary.source_periods || 0} 个账期`);
+  if (payload.summary.extra_columns) {
+    addWalmartTransactionLog(`发现 ${payload.summary.extra_columns} 个源文件新增字段，已记录在审计表`, "warning");
+  }
+  if (payload.summary.unmapped_values) {
+    addWalmartTransactionLog(`发现 ${payload.summary.unmapped_values} 个未映射英文值，已保留原文并进入审计`, "warning");
+  }
+  if (payload.summary.warnings) {
+    addWalmartTransactionLog(`需要关注：${payload.summary.warnings} 项跳过或复核信息`, "warning");
+  }
+  addWalmartTransactionLog("经营数据总表与清洗审计已生成，可下载复核", "success");
+  renderWalmartTransactionJob(payload);
+  if (state.activeView === "history") {
+    loadHistory();
+  }
+}
+
+async function handlePortFeeResponse(response) {
+  const payload = await response.json();
+  if (response.status === 401) {
+    showLoggedOut();
+    return;
+  }
+  if (!response.ok) {
+    addPortFeeLog(payload.error || "处理失败", "error");
+    logSkippedServerPaths(payload.skipped_paths, addPortFeeLog);
+    setPortFeeStatus(payload.error || "处理失败");
+    return;
+  }
+  logSkippedServerPaths(payload.skipped_paths, addPortFeeLog);
+  state.portFeeJobId = payload.job_id;
+  addPortFeeLog(`上传/扫描完成：共 ${payload.summary.source_files || 0} 个 PDF`);
+  addPortFeeLog(`提取完成：${payload.summary.processed || 0} 张发票，${payload.summary.detail_rows || 0} 条费用明细`);
+  if (payload.summary.failed) {
+    addPortFeeLog(`解析失败：${payload.summary.failed} 个 PDF`, "warning");
+  }
+  if (payload.summary.warnings) {
+    addPortFeeLog(`需要复核：${payload.summary.warnings} 张发票`, "warning");
+  }
+  addPortFeeLog("Excel 工作簿已生成，可下载复核", "success");
+  renderPortFeeJob(payload);
+  if (state.activeView === "history") {
+    loadHistory();
+  }
+}
+
 function renderBatch(payload) {
   const { summary } = payload;
   els.filesMetric.textContent = summary.files;
@@ -1173,6 +1491,31 @@ function setPendingReportFiles(items, label) {
   addReportLog(`${label}：${files.length} 个文件，${pdfCount} 个 PDF${skippedText}`, skippedCount ? "warning" : "info");
   logSkippedNonPdfFiles(files, addReportLog);
   setReportStatus(`${label}：${pdfCount} 个 PDF 已就绪${skippedText}`);
+}
+
+function setPendingPortFeeFiles(items, label) {
+  const files = items.filter((item) => item && item.file && item.file.name);
+  state.pendingPortFeeFiles = files;
+  const pdfCount = files.filter((item) => isPdfFile(item.file)).length;
+  const skippedCount = files.length - pdfCount;
+  const folderCount = uniqueSorted(files
+    .map((item) => item.relativePath || item.file.name)
+    .filter((path) => path.includes("/"))
+    .map((path) => path.split("/")[0])).length;
+
+  if (!files.length) {
+    els.portFeeUploadSelectionText.textContent = "没有读取到文件，请重新拖放或选择";
+    addPortFeeLog("没有读取到文件", "warning");
+    setPortFeeStatus("没有读取到文件");
+    return;
+  }
+
+  const folderText = folderCount ? `，包含 ${folderCount} 个顶层文件夹` : "";
+  const skippedText = skippedCount ? `，${skippedCount} 个非 PDF 会被跳过` : "";
+  els.portFeeUploadSelectionText.textContent = `${label}：${files.length} 个文件，${pdfCount} 个 PDF${folderText}${skippedText}`;
+  addPortFeeLog(`${label}：${files.length} 个文件，${pdfCount} 个 PDF${skippedText}`, skippedCount ? "warning" : "info");
+  logSkippedNonPdfFiles(files, addPortFeeLog);
+  setPortFeeStatus(`${label}：${pdfCount} 个 PDF 已就绪${skippedText}`);
 }
 
 async function collectDroppedFiles(dataTransfer) {
@@ -1286,6 +1629,24 @@ function resetTransactionLogs(message) {
 
 function addTransactionLog(message, level = "info") {
   addLogItem(els.transactionLogList, message, level);
+}
+
+function resetWalmartTransactionLogs(message) {
+  els.walmartTransactionLogList.innerHTML = "";
+  addWalmartTransactionLog(message);
+}
+
+function addWalmartTransactionLog(message, level = "info") {
+  addLogItem(els.walmartTransactionLogList, message, level);
+}
+
+function resetPortFeeLogs(message) {
+  els.portFeeLogList.innerHTML = "";
+  addPortFeeLog(message);
+}
+
+function addPortFeeLog(message, level = "info") {
+  addLogItem(els.portFeeLogList, message, level);
 }
 
 function addLogItem(list, message, level = "info") {
@@ -1758,6 +2119,52 @@ function renderTransactionJob(payload) {
   els.transactionResultBody.innerHTML = state.transactionRows.map(renderTransactionRow).join("");
 }
 
+function renderWalmartTransactionJob(payload) {
+  const { summary } = payload;
+  state.walmartTransactionRows = payload.rows || [];
+  els.walmartTransactionFilesMetric.textContent = summary.source_files || 0;
+  els.walmartTransactionRowsMetric.textContent = summary.output_rows || summary.parsed_rows || 0;
+  els.walmartTransactionPeriodsMetric.textContent = summary.source_periods || 0;
+  els.walmartTransactionWarningsMetric.textContent = summary.warnings || 0;
+  els.walmartTransactionBatchLabel.textContent = payload.source_label;
+  setWalmartTransactionStatus(`已清洗 ${summary.source_files || 0} 个文件，${summary.output_rows || 0} 条明细`);
+
+  els.walmartTransactionDownload.href = payload.download_url;
+  els.walmartTransactionAuditDownload.href = payload.audit_download_url;
+  els.walmartTransactionDownload.classList.remove("disabled");
+  els.walmartTransactionAuditDownload.classList.remove("disabled");
+  setSoftDisabled(els.clearWalmartTransactionResult, false);
+
+  if (!state.walmartTransactionRows.length) {
+    els.walmartTransactionResultBody.innerHTML = '<tr><td class="empty" colspan="7">该文件夹没有可处理的沃尔玛财务报表。</td></tr>';
+    return;
+  }
+
+  els.walmartTransactionResultBody.innerHTML = state.walmartTransactionRows.map(renderWalmartTransactionRow).join("");
+}
+
+function renderPortFeeJob(payload) {
+  const { summary } = payload;
+  state.portFeeRows = payload.rows || [];
+  els.portFeeFilesMetric.textContent = summary.source_files || 0;
+  els.portFeeRowsMetric.textContent = summary.detail_rows || 0;
+  els.portFeeAmountMetric.textContent = `${summary.currency || ""} ${summary.total_amount || "0.00"}`.trim();
+  els.portFeeWarningsMetric.textContent = summary.warnings || 0;
+  els.portFeeBatchLabel.textContent = payload.source_label;
+  setPortFeeStatus(`已提取 ${summary.source_files || 0} 个 PDF，${summary.warnings || 0} 个需复核`);
+
+  els.portFeeDownload.href = payload.download_url;
+  els.portFeeDownload.classList.remove("disabled");
+  setSoftDisabled(els.clearPortFeeResult, false);
+
+  if (!state.portFeeRows.length) {
+    els.portFeeResultBody.innerHTML = '<tr><td class="empty" colspan="8">该文件夹没有可处理的港杂费发票 PDF。</td></tr>';
+    return;
+  }
+
+  els.portFeeResultBody.innerHTML = state.portFeeRows.map(renderPortFeeRow).join("");
+}
+
 async function loadHistory() {
   els.historyStatusText.textContent = "正在读取历史任务...";
   const response = await fetch("/api/history");
@@ -1891,11 +2298,20 @@ function renderPackageResult(payload) {
   const skipped = payload.skipped || [];
   const bundle = payload.bundle || {};
   const totalFiles = packages.reduce((sum, item) => sum + (item.file_count || 0), 0);
+  const packageMetaText = (item) => {
+    const countryCount = item.country_count || (item.countries || []).length || 0;
+    const countryText = countryCount ? ` / ${countryCount} 个国家` : "";
+    return `${item.file_count} 个 PDF${countryText}`;
+  };
+  const packageCountryTitle = (item) => {
+    const countries = item.countries || [];
+    return countries.length ? ` title="${escapeHtml(countries.join("、"))}"` : "";
+  };
   const packageLinks = packages.length
     ? packages.map((item) => `
-        <a class="package-download" href="${escapeHtml(item.download_url)}" download>
+        <a class="package-download" href="${escapeHtml(item.download_url)}" download${packageCountryTitle(item)}>
           <strong>${escapeHtml(item.factory_name)} 压缩包</strong>
-          <span>${escapeHtml(item.file_count)} 个 PDF</span>
+          <span>${escapeHtml(packageMetaText(item))}</span>
         </a>
       `).join("")
     : '<span class="package-empty">没有生成压缩包</span>';
@@ -1911,13 +2327,13 @@ function renderPackageResult(payload) {
     <div class="package-result-main">
       <div class="package-result-heading">
         <span class="badge ok">打包完成</span>
-        <strong>已按工厂生成 ${escapeHtml(packages.length)} 个压缩包</strong>
+        <strong>已按工厂/国家生成 ${escapeHtml(packages.length)} 个压缩包</strong>
       </div>
-      <p>${escapeHtml(totalFiles)} 个 PDF 已归档。可以直接点击下方按钮下载，也可以在服务器保存位置中查找。</p>
+      <p>${escapeHtml(totalFiles)} 个 PDF 已归档。每个工厂压缩包内部会继续按国家建立文件夹。</p>
       ${bundle.download_url ? `
         <a class="package-download package-download-all" href="${escapeHtml(bundle.download_url)}" download>
           <strong>下载全部压缩包</strong>
-          <span>${escapeHtml(bundle.package_count || packages.length)} 个工厂压缩包</span>
+          <span>${escapeHtml(bundle.package_count || packages.length)} 个工厂压缩包，包内按国家分文件夹</span>
         </a>
       ` : ""}
       <dl class="package-path">
@@ -2303,6 +2719,50 @@ function renderTransactionRow(row) {
   `;
 }
 
+function renderWalmartTransactionRow(row) {
+  const statusClass = row.status === "通过" ? "ok" : "warn";
+  const rowCounts = `${row.source_rows || 0} / ${row.parsed_rows || 0}`;
+  const dateRange = [row.date_min, row.date_max].filter(Boolean).join(" 至 ") || "-";
+  return `
+    <tr>
+      <td class="filename">${escapeHtml(row.source_file || "-")}</td>
+      <td>${escapeHtml(row.sheet || "-")}</td>
+      <td>${escapeHtml(row.source_period || "-")}</td>
+      <td>${escapeHtml(rowCounts)}</td>
+      <td>${escapeHtml(dateRange)}</td>
+      <td><span class="badge ${statusClass}">${escapeHtml(row.status || "需复核")}</span></td>
+      <td class="suggested">${escapeHtml(row.notes || "-")}</td>
+    </tr>
+  `;
+}
+
+function renderPortFeeRow(row) {
+  const statusClass = row["状态"] === "通过" ? "ok" : "warn";
+  const refText = [row["Ref No."], row["FCR No."]].filter(Boolean).join(" / ") || "-";
+  const routeText = [row["Vessel"], row["Destination"]].filter(Boolean).join(" / ") || "-";
+  const volumeText = [
+    row["Total Cartons"] ? `${row["Total Cartons"]} 箱` : "",
+    row["Total CBM"] ? `${row["Total CBM"]} CBM` : "",
+  ].filter(Boolean).join(" / ") || "-";
+  const amountText = [row["Currency"], row["Invoice Amount"]].filter(Boolean).join(" ") || "-";
+  const notes = row["问题说明"] || "-";
+  return `
+    <tr>
+      <td class="filename">${escapeHtml(row["来源文件"] || "-")}</td>
+      <td>${escapeHtml(row["Invoice No."] || "-")}</td>
+      <td>${escapeHtml(row["Issue Date"] || "-")}</td>
+      <td>${escapeHtml(refText)}</td>
+      <td>${escapeHtml(routeText)}</td>
+      <td>${escapeHtml(volumeText)}</td>
+      <td>${escapeHtml(amountText)}</td>
+      <td>
+        <span class="badge ${statusClass}">${escapeHtml(row["状态"] || "需复核")}</span>
+        <span class="cell-subtle">${escapeHtml(notes)}</span>
+      </td>
+    </tr>
+  `;
+}
+
 function renderHistory(payload) {
   const { summary, tasks } = payload;
   state.historyTasks = tasks || [];
@@ -2311,6 +2771,8 @@ function renderHistory(payload) {
   els.historyShipmentMetric.textContent = summary.shipment_pdf;
   els.historyReportMetric.textContent = summary.report_pdf;
   els.historyTransactionMetric.textContent = summary.transaction_csv || 0;
+  els.historyWalmartTransactionMetric.textContent = summary.walmart_transaction || 0;
+  els.historyPortFeeMetric.textContent = summary.port_fee_pdf || 0;
   els.historyReviewMetric.textContent = summary.needs_review;
   els.historyStatusText.textContent = summary.total
     ? `已记录 ${summary.total} 个任务`
@@ -2425,8 +2887,9 @@ function renderHistoryDownloads(downloads) {
   if (!downloads.length) {
     return '<div class="history-download-panel"><span class="package-empty">该任务暂无可重新下载的交付物。</span></div>';
   }
-  const allFactory = downloads.find((item) => item.label === "全部工厂压缩包");
-  const factoryPackages = downloads.filter((item) => item.label.endsWith("压缩包") && item.label !== "全部工厂压缩包");
+  const allFactoryLabels = new Set(["全部工厂压缩包", "全部工厂/国家压缩包"]);
+  const allFactory = downloads.find((item) => allFactoryLabels.has(item.label));
+  const factoryPackages = downloads.filter((item) => item.label.endsWith("压缩包") && !allFactoryLabels.has(item.label));
   const reportFiles = downloads.filter((item) => !item.label.endsWith("压缩包"));
 
   return `
@@ -2447,7 +2910,7 @@ function renderHistoryDownloads(downloads) {
       ${factoryPackages.length ? `
         <details class="history-download-details">
           <summary>
-            <span>单个工厂压缩包</span>
+            <span>单个工厂压缩包（包内按国家）</span>
             <span class="history-download-summary-action">
               <span class="history-download-count">${escapeHtml(factoryPackages.length)} 个</span>
               <span class="history-download-toggle-text" data-open-label="收起">展开查看</span>
@@ -2482,8 +2945,15 @@ function historySummaryItems(summary) {
     warnings: "告警",
     detail_rows: "明细行",
     source_files: "源文件",
+    source_periods: "账期",
+    output_rows: "明细行",
+    skipped_files: "跳过文件",
+    total_amount_cny: "人民币金额",
     total_rows: "总行数",
     countries: "国家数",
+    total_amount: "合计金额",
+    failed: "失败",
+    skipped: "跳过",
   };
   return Object.entries(summary)
     .filter(([key, value]) => {
@@ -2503,6 +2973,12 @@ function historySummaryText(task) {
   }
   if (task.type === "transaction_csv") {
     return `${summary.source_files || 0} 个文件 / ${summary.total_rows || 0} 条明细 / ${summary.countries || 0} 个国家`;
+  }
+  if (task.type === "walmart_transaction") {
+    return `${summary.source_files || 0} 个文件 / ${summary.output_rows || 0} 条明细 / ${summary.source_periods || 0} 个账期`;
+  }
+  if (task.type === "port_fee_pdf") {
+    return `${summary.source_files || 0} 个PDF / ${summary.detail_rows || 0} 条费用 / ${summary.warnings || 0} 个复核`;
   }
   return "-";
 }
@@ -2761,7 +3237,7 @@ async function deleteUser(userId) {
 }
 
 function setActiveView(view) {
-  state.activeView = ["shipment", "report", "transaction", "history", "settings"].includes(view) ? view : "shipment";
+  state.activeView = ["shipment", "report", "transaction", "walmartTransaction", "portFee", "history", "settings"].includes(view) ? view : "shipment";
   els.navItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.view === state.activeView);
   });
@@ -2786,7 +3262,9 @@ function setActiveView(view) {
 
 function viewFromHash() {
   if (window.location.hash.includes("report")) return "report";
+  if (window.location.hash.includes("walmart-transaction")) return "walmartTransaction";
   if (window.location.hash.includes("transaction")) return "transaction";
+  if (window.location.hash.includes("port-fee")) return "portFee";
   if (window.location.hash.includes("history")) return "history";
   if (window.location.hash.includes("settings")) return "settings";
   return "shipment";
@@ -3110,6 +3588,212 @@ function clearTransactionResults({ resetInput = false } = {}) {
   }
   resetTransactionLogs(resetInput ? "已新建交易明细任务，等待导入" : "已清空当前交易明细结果");
   setTransactionStatus("等待导入");
+}
+
+function setWalmartTransactionBusy(message) {
+  state.walmartTransactionBusy = true;
+  els.walmartTransactionStatusText.textContent = message;
+  updateWalmartTransactionBusyControls();
+}
+
+function setWalmartTransactionStatus(message) {
+  state.walmartTransactionBusy = false;
+  els.walmartTransactionStatusText.textContent = message;
+  updateWalmartTransactionBusyControls();
+}
+
+function setWalmartTransactionIdle() {
+  state.walmartTransactionBusy = false;
+  updateWalmartTransactionBusyControls();
+}
+
+function updateWalmartTransactionBusyControls() {
+  els.walmartTransactionSubmitButton.disabled = state.walmartTransactionBusy;
+  setSoftDisabled(els.newWalmartTransactionTask, state.walmartTransactionBusy);
+  setSoftDisabled(els.cancelWalmartTransactionTask, !state.walmartTransactionBusy || !state.walmartTransactionAbortController);
+  setSoftDisabled(els.retryWalmartTransactionTask, state.walmartTransactionBusy || !state.lastWalmartTransactionTask);
+  setSoftDisabled(els.clearWalmartTransactionResult, state.walmartTransactionBusy || !state.walmartTransactionRows.length);
+  els.walmartTransactionSubmitButton.textContent = state.walmartTransactionBusy ? "处理中..." : "清洗并生成 Excel";
+}
+
+function retryWalmartTransactionTask() {
+  if (state.walmartTransactionBusy) {
+    addWalmartTransactionLog("当前任务仍在进行，请先终止或等待完成后再重试", "warning");
+    setWalmartTransactionStatus("当前任务仍在进行");
+    return;
+  }
+  if (!state.lastWalmartTransactionTask) {
+    addWalmartTransactionLog("暂无上次沃尔玛任务可重试，请先处理一次", "warning");
+    setWalmartTransactionStatus("暂无上次任务可重试");
+    return;
+  }
+  state.lastWalmartTransactionTask();
+}
+
+function cancelWalmartTransactionTask() {
+  const controller = state.walmartTransactionAbortController;
+  if (!controller) {
+    addWalmartTransactionLog("当前没有可终止的沃尔玛交易数据任务", "warning");
+    setWalmartTransactionStatus("当前没有正在执行的沃尔玛任务");
+    return;
+  }
+  controller.abort();
+  state.walmartTransactionAbortController = null;
+  addWalmartTransactionLog("已收到终止请求，正在停止当前沃尔玛处理任务...", "warning");
+  setWalmartTransactionStatus("正在终止当前任务...");
+  els.cancelWalmartTransactionTask.textContent = "正在终止...";
+}
+
+function clearWalmartTransactionAbortController(controller) {
+  if (state.walmartTransactionAbortController !== controller) return;
+  state.walmartTransactionAbortController = null;
+  updateWalmartTransactionBusyControls();
+}
+
+function disableWalmartTransactionDownloads() {
+  els.walmartTransactionDownload.href = "#";
+  els.walmartTransactionAuditDownload.href = "#";
+  els.walmartTransactionDownload.classList.add("disabled");
+  els.walmartTransactionAuditDownload.classList.add("disabled");
+  setSoftDisabled(els.clearWalmartTransactionResult, true);
+}
+
+function startNewWalmartTransactionTask() {
+  clearWalmartTransactionResults({ resetInput: true });
+}
+
+function clearWalmartTransactionResults({ resetInput = false } = {}) {
+  if (state.walmartTransactionBusy) {
+    addWalmartTransactionLog("请先终止当前沃尔玛任务，再新建或清空", "warning");
+    setWalmartTransactionStatus("请先终止当前任务");
+    return;
+  }
+  if (!resetInput && !state.walmartTransactionRows.length) {
+    addWalmartTransactionLog("当前没有沃尔玛清洗结果可清空", "warning");
+    setWalmartTransactionStatus("当前没有结果可清空");
+    return;
+  }
+  state.walmartTransactionJobId = "";
+  state.walmartTransactionRows = [];
+  els.walmartTransactionFilesMetric.textContent = "0";
+  els.walmartTransactionRowsMetric.textContent = "0";
+  els.walmartTransactionPeriodsMetric.textContent = "0";
+  els.walmartTransactionWarningsMetric.textContent = "0";
+  els.walmartTransactionBatchLabel.textContent = "尚未处理沃尔玛交易数据";
+  els.walmartTransactionResultBody.innerHTML = '<tr><td class="empty" colspan="7">处理一批沃尔玛财务报表 Excel 后，结果会显示在这里。</td></tr>';
+  disableWalmartTransactionDownloads();
+  if (resetInput) {
+    state.lastWalmartTransactionTask = null;
+  }
+  resetWalmartTransactionLogs(resetInput ? "已新建沃尔玛交易数据任务，等待导入" : "已清空当前沃尔玛结果");
+  setWalmartTransactionStatus("等待导入");
+}
+
+function setPortFeeBusy(message) {
+  state.portFeeBusy = true;
+  els.portFeeStatusText.textContent = message;
+  updatePortFeeBusyControls();
+}
+
+function setPortFeeStatus(message) {
+  state.portFeeBusy = false;
+  els.portFeeStatusText.textContent = message;
+  updatePortFeeBusyControls();
+}
+
+function setPortFeeIdle() {
+  state.portFeeBusy = false;
+  updatePortFeeBusyControls();
+}
+
+function updatePortFeeBusyControls() {
+  els.portFeeFolderSubmitButton.disabled = state.portFeeBusy;
+  els.portFeeUploadSubmitButton.disabled = state.portFeeBusy;
+  els.portFeeUploadPickers.forEach((button) => {
+    button.disabled = state.portFeeBusy;
+  });
+  els.portFeeUploadForm.classList.toggle("disabled", state.portFeeBusy);
+  setSoftDisabled(els.newPortFeeTask, state.portFeeBusy);
+  setSoftDisabled(els.cancelPortFeeTask, !state.portFeeBusy || !state.portFeeAbortController);
+  setSoftDisabled(els.retryPortFeeTask, state.portFeeBusy || !state.lastPortFeeTask);
+  setSoftDisabled(els.clearPortFeeResult, state.portFeeBusy || !state.portFeeRows.length);
+  els.portFeeFolderSubmitButton.textContent = state.portFeeBusy ? "处理中..." : "扫描文件夹";
+  els.portFeeUploadSubmitButton.textContent = state.portFeeBusy ? "处理中..." : "上传并提取";
+}
+
+function retryPortFeeTask() {
+  if (state.portFeeBusy) {
+    addPortFeeLog("当前任务仍在进行，请先终止或等待完成后再重试", "warning");
+    setPortFeeStatus("当前任务仍在进行");
+    return;
+  }
+  if (!state.lastPortFeeTask) {
+    addPortFeeLog("暂无上次港杂费任务可重试，请先处理一次", "warning");
+    setPortFeeStatus("暂无上次任务可重试");
+    return;
+  }
+  state.lastPortFeeTask();
+}
+
+function cancelPortFeeTask() {
+  const controller = state.portFeeAbortController;
+  if (!controller) {
+    addPortFeeLog("当前没有可终止的港杂费任务", "warning");
+    setPortFeeStatus("当前没有正在执行的港杂费任务");
+    return;
+  }
+  controller.abort();
+  state.portFeeAbortController = null;
+  addPortFeeLog("已收到终止请求，正在停止当前港杂费处理任务...", "warning");
+  setPortFeeStatus("正在终止当前任务...");
+  els.cancelPortFeeTask.textContent = "正在终止...";
+}
+
+function clearPortFeeAbortController(controller) {
+  if (state.portFeeAbortController !== controller) return;
+  state.portFeeAbortController = null;
+  updatePortFeeBusyControls();
+}
+
+function disablePortFeeDownload() {
+  els.portFeeDownload.href = "#";
+  els.portFeeDownload.classList.add("disabled");
+  setSoftDisabled(els.clearPortFeeResult, true);
+}
+
+function startNewPortFeeTask() {
+  clearPortFeeResults({ resetInput: true });
+}
+
+function clearPortFeeResults({ resetInput = false } = {}) {
+  if (state.portFeeBusy) {
+    addPortFeeLog("请先终止当前港杂费任务，再新建或清空", "warning");
+    setPortFeeStatus("请先终止当前任务");
+    return;
+  }
+  if (!resetInput && !state.portFeeRows.length) {
+    addPortFeeLog("当前没有港杂费结果可清空", "warning");
+    setPortFeeStatus("当前没有结果可清空");
+    return;
+  }
+  state.portFeeJobId = "";
+  state.portFeeRows = [];
+  els.portFeeFilesMetric.textContent = "0";
+  els.portFeeRowsMetric.textContent = "0";
+  els.portFeeAmountMetric.textContent = "0.00";
+  els.portFeeWarningsMetric.textContent = "0";
+  els.portFeeBatchLabel.textContent = "尚未处理港杂费发票";
+  els.portFeeResultBody.innerHTML = '<tr><td class="empty" colspan="8">处理一批港杂费发票 PDF 后，结果会显示在这里。</td></tr>';
+  disablePortFeeDownload();
+  if (resetInput) {
+    state.pendingPortFeeFiles = [];
+    state.lastPortFeeTask = null;
+    els.portFeeFileInput.value = "";
+    els.portFeeFolderUploadInput.value = "";
+    els.portFeeUploadSelectionText.textContent = "支持一批 PDF 文件，也支持按日期 / 供应商分层的文件夹";
+  }
+  resetPortFeeLogs(resetInput ? "已新建港杂费任务，等待导入" : "已清空当前港杂费结果");
+  setPortFeeStatus("等待导入");
 }
 
 function closeExportMenu() {

@@ -268,8 +268,20 @@ class ShipmentPdfParsingTest(unittest.TestCase):
             )
 
             self.assertEqual(len(packaged["packages"]), 2)
-            self.assertTrue((root / "outputs" / "batch001-factory-packages" / "鹏鑫达-batch001.zip").exists())
-            self.assertTrue((root / "outputs" / "batch001-factory-packages" / "海达-batch001.zip").exists())
+            package_by_name = {package["factory_name"]: package for package in packaged["packages"]}
+            self.assertEqual(package_by_name["鹏鑫达"]["country_count"], 1)
+            self.assertEqual(package_by_name["鹏鑫达"]["countries"], ["澳大利亚"])
+            self.assertEqual(package_by_name["海达"]["country_count"], 1)
+            self.assertEqual(package_by_name["海达"]["countries"], ["美国"])
+
+            px_zip = root / "outputs" / "batch001-factory-packages" / "鹏鑫达-batch001.zip"
+            hd_zip = root / "outputs" / "batch001-factory-packages" / "海达-batch001.zip"
+            self.assertTrue(px_zip.exists())
+            self.assertTrue(hd_zip.exists())
+            with zipfile.ZipFile(px_zip) as archive:
+                self.assertEqual(archive.namelist(), [f"澳大利亚/{record_a.original_filename}"])
+            with zipfile.ZipFile(hd_zip) as archive:
+                self.assertEqual(archive.namelist(), [f"美国/{record_b.original_filename}"])
 
     def test_scan_folder_finds_pdfs_recursively(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -333,7 +345,7 @@ class ShipmentPdfParsingTest(unittest.TestCase):
                 )
 
             labels = {item["label"] for item in task["downloads"]}
-            self.assertIn("全部工厂压缩包", labels)
+            self.assertIn("全部工厂/国家压缩包", labels)
             self.assertIn("晟通 压缩包", labels)
             self.assertTrue((package_root / "全部工厂-task001.zip").exists())
 

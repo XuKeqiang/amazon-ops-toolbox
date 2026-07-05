@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Amazon Operations Toolbox</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260705-task-buttons-clickable" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260705-walmart-transaction" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen hidden" aria-label="登录">
@@ -41,7 +41,8 @@
         <button class="nav-item active" type="button" data-view="shipment">亚马逊 · 货件PDF</button>
         <button class="nav-item" type="button" data-view="report">亚马逊 · 汇总报告</button>
         <button class="nav-item" type="button" data-view="transaction">亚马逊 · 交易明细</button>
-        <button class="nav-item" type="button" disabled>沃尔玛 · 待规划</button>
+        <button class="nav-item" type="button" data-view="portFee">亚马逊 · 港杂费</button>
+        <button class="nav-item" type="button" data-view="walmartTransaction">沃尔玛 · 交易数据</button>
       </nav>
     </header>
 
@@ -61,10 +62,11 @@
             <button class="nav-item active" type="button" data-view="shipment">货件PDF处理</button>
             <button class="nav-item" type="button" data-view="report">汇总报告PDF</button>
             <button class="nav-item" type="button" data-view="transaction">交易明细CSV</button>
+            <button class="nav-item" type="button" data-view="portFee">港杂费处理</button>
           </div>
           <div class="nav-group">
             <span class="nav-group-title">沃尔玛</span>
-            <button class="nav-item placeholder" type="button" disabled>功能预留</button>
+            <button class="nav-item" type="button" data-view="walmartTransaction">交易数据分析</button>
           </div>
         </nav>
         <div class="sidebar-note">
@@ -142,7 +144,7 @@
                     <a id="exportXlsx" class="export-menu-item disabled" href="#" role="menuitem">Excel 工作簿</a>
                   </div>
                 </div>
-                <button id="packageButton" class="button accent compact" type="button" disabled>按工厂打包</button>
+                <button id="packageButton" class="button accent compact" type="button" disabled>按工厂/国家打包</button>
                 <button id="renameButton" class="button secondary compact" type="button" disabled>确认重命名</button>
               </div>
             </div>
@@ -458,6 +460,246 @@
           </section>
         </section>
 
+        <section id="portFeeView" class="view-panel hidden" data-view-panel="portFee">
+          <header class="topbar">
+            <div>
+              <p class="kicker">港杂费 PDF</p>
+              <h1>港杂费发票提取</h1>
+            </div>
+            <div class="topbar-actions">
+              <button class="button secondary" type="button" data-open-history="port_fee_pdf">查看历史</button>
+            </div>
+          </header>
+
+          <section class="input-band" aria-label="港杂费发票导入">
+            <form id="portFeeUploadForm" class="dropzone">
+              <input id="portFeeFileInput" class="visually-hidden" name="files" type="file" accept="application/pdf,.pdf" multiple />
+              <input id="portFeeFolderUploadInput" class="visually-hidden" name="folderFiles" type="file" multiple webkitdirectory directory />
+              <div id="portFeeDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择港杂费发票 PDF">
+                <strong>拖放港杂费发票 PDF 或文件夹</strong>
+                <span id="portFeeUploadSelectionText">支持一批 PDF 文件，也支持按日期 / 供应商分层的文件夹</span>
+              </div>
+              <div class="dropzone-actions">
+                <button class="button secondary compact" type="button" data-port-fee-upload-picker="files">选择PDF</button>
+                <button class="button secondary compact" type="button" data-port-fee-upload-picker="folder">选择文件夹</button>
+                <button class="button accent" type="submit">上传并提取</button>
+              </div>
+            </form>
+
+            <form id="portFeeFolderForm" class="folder-form">
+              <label for="portFeeFolderInput">服务器文件夹路径</label>
+              <div class="inline-control">
+                <input id="portFeeFolderInput" type="text" value="/Users/xukeqiang/Downloads/6.23 港杂费付款申请" />
+                <button class="button primary" type="submit">扫描文件夹</button>
+              </div>
+            </form>
+            <div class="task-controls" aria-label="港杂费任务控制">
+              <button id="newPortFeeTask" class="button secondary compact" type="button">新建任务</button>
+              <button id="cancelPortFeeTask" class="button secondary compact danger" type="button">终止当前任务</button>
+              <button id="retryPortFeeTask" class="button secondary compact" type="button">重试上次任务</button>
+              <button id="clearPortFeeResult" class="button secondary compact" type="button">清空结果</button>
+            </div>
+          </section>
+
+          <section class="log-panel" aria-label="港杂费处理日志">
+            <div class="log-panel-header">
+              <h2>处理日志</h2>
+              <span>上传、解析、导出进度</span>
+            </div>
+            <ol id="portFeeLogList" class="log-list" aria-live="polite">
+              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+            </ol>
+          </section>
+
+          <section class="task-brief" aria-label="港杂费任务说明">
+            <div>
+              <span class="section-label">任务说明</span>
+              <h2>港杂费发票 PDF 提取</h2>
+              <p>用于批量处理港杂费付款申请中的 PDF 发票，提取 Invoice No.、日期、Ref No.、FCR、目的港、柜号、费用明细和发票金额，并生成结构化 Excel。</p>
+            </div>
+            <div class="brief-grid">
+              <div>
+                <strong>文件要求</strong>
+                <span>支持可复制文本的 PDF 发票；扫描件或图片型 PDF 会进入需复核队列。</span>
+              </div>
+              <div>
+                <strong>核验规则</strong>
+                <span>系统会校验必填字段、费用明细合计与 Invoice Amount 是否一致。</span>
+              </div>
+              <div>
+                <strong>输出内容</strong>
+                <span>Excel 包含“发票汇总”和“费用明细”两个工作表。</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-metrics" aria-label="港杂费概览">
+            <div class="metric compact">
+              <span>PDF 发票</span>
+              <strong id="portFeeFilesMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>费用明细</span>
+              <strong id="portFeeRowsMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>合计金额</span>
+              <strong id="portFeeAmountMetric">0.00</strong>
+            </div>
+            <div class="metric compact">
+              <span>需复核</span>
+              <strong id="portFeeWarningsMetric">0</strong>
+            </div>
+          </section>
+
+          <section class="table-panel">
+            <div class="panel-header">
+              <div>
+                <h2>提取结果</h2>
+                <p id="portFeeBatchLabel">尚未处理港杂费发票</p>
+              </div>
+              <div class="panel-header-actions">
+                <div id="portFeeStatusText" class="status-text">等待导入</div>
+                <a id="portFeeDownload" class="button secondary compact disabled" href="#">下载 Excel</a>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="transaction-table">
+                <thead>
+                  <tr>
+                    <th>来源文件</th>
+                    <th>Invoice No.</th>
+                    <th>Issue Date</th>
+                    <th>Ref / FCR</th>
+                    <th>航程 / 目的港</th>
+                    <th>箱量 / CBM</th>
+                    <th>金额</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="portFeeResultBody">
+                  <tr>
+                    <td class="empty" colspan="8">处理一批港杂费发票 PDF 后，结果会显示在这里。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="walmartTransactionView" class="view-panel hidden" data-view-panel="walmartTransaction">
+          <header class="topbar">
+            <div>
+              <p class="kicker">沃尔玛 · 交易数据</p>
+              <h1>交易数据分析</h1>
+            </div>
+            <div class="topbar-actions">
+              <button class="button secondary" type="button" data-open-history="walmart_transaction">查看历史</button>
+            </div>
+          </header>
+
+          <section class="input-band single" aria-label="沃尔玛交易数据导入">
+            <form id="walmartTransactionFolderForm" class="folder-form wide">
+              <label for="walmartTransactionFolderInput">服务器文件夹路径</label>
+              <div class="inline-control">
+                <input id="walmartTransactionFolderInput" type="text" value="/Users/xukeqiang/Downloads/沃尔玛财务报表" />
+                <button class="button accent" type="submit">清洗并生成 Excel</button>
+              </div>
+            </form>
+            <div class="task-controls" aria-label="沃尔玛交易数据任务控制">
+              <button id="newWalmartTransactionTask" class="button secondary compact" type="button">新建任务</button>
+              <button id="cancelWalmartTransactionTask" class="button secondary compact danger" type="button">终止当前任务</button>
+              <button id="retryWalmartTransactionTask" class="button secondary compact" type="button">重试上次任务</button>
+              <button id="clearWalmartTransactionResult" class="button secondary compact" type="button">清空结果</button>
+            </div>
+          </section>
+
+          <section class="log-panel" aria-label="沃尔玛交易数据处理日志">
+            <div class="log-panel-header">
+              <h2>处理日志</h2>
+              <span>读取、字段校准、合并、导出进度</span>
+            </div>
+            <ol id="walmartTransactionLogList" class="log-list" aria-live="polite">
+              <li class="muted">等待输入服务器文件夹路径。</li>
+            </ol>
+          </section>
+
+          <section class="task-brief" aria-label="沃尔玛交易数据任务说明">
+            <div class="task-brief-main">
+              <p class="section-label">任务说明</p>
+              <h2>Excel 报表数据清洗合并</h2>
+              <p>用于批量处理 Walmart 后台导出的财务报表 Excel，系统会读取各账期工作簿，跳过说明行，按英文表头统一字段，补充中文字段、来源账期、年月季度、人民币金额和审计记录。</p>
+            </div>
+            <div class="task-brief-list">
+              <div>
+                <strong>文件要求</strong>
+                <span>支持文件夹内包含多份 .xlsx/.xlsm 财务报表；非 Excel、临时文件和已生成结果会在审计中标记为跳过。</span>
+              </div>
+              <div>
+                <strong>字段策略</strong>
+                <span>按表头名称映射字段，兼容 Walmart 后续新增列；目标主表保持统一 50 列结构。</span>
+              </div>
+              <div>
+                <strong>输出内容</strong>
+                <span>生成“沃尔玛经营数据”总表和“清洗审计”工作簿，可在历史任务中重新下载。</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-metrics" aria-label="沃尔玛交易数据概览">
+            <div class="metric compact">
+              <span>源文件</span>
+              <strong id="walmartTransactionFilesMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>明细行</span>
+              <strong id="walmartTransactionRowsMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>账期</span>
+              <strong id="walmartTransactionPeriodsMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>需关注</span>
+              <strong id="walmartTransactionWarningsMetric">0</strong>
+            </div>
+          </section>
+
+          <section class="table-panel">
+            <div class="panel-header">
+              <div>
+                <h2>清洗结果</h2>
+                <p id="walmartTransactionBatchLabel">尚未处理沃尔玛交易数据</p>
+              </div>
+              <div class="panel-header-actions">
+                <div id="walmartTransactionStatusText" class="status-text">等待导入</div>
+                <a id="walmartTransactionDownload" class="button secondary compact disabled" href="#">下载总表</a>
+                <a id="walmartTransactionAuditDownload" class="button secondary compact disabled" href="#">下载审计</a>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="transaction-table">
+                <thead>
+                  <tr>
+                    <th>来源文件</th>
+                    <th>工作表</th>
+                    <th>来源账期</th>
+                    <th>源行/解析</th>
+                    <th>日期范围</th>
+                    <th>状态</th>
+                    <th>备注</th>
+                  </tr>
+                </thead>
+                <tbody id="walmartTransactionResultBody">
+                  <tr>
+                    <td class="empty" colspan="7">处理一批沃尔玛财务报表 Excel 后，结果会显示在这里。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
         <section id="historyView" class="view-panel hidden" data-view-panel="history">
           <header class="topbar">
             <div>
@@ -488,6 +730,14 @@
               <strong id="historyTransactionMetric">0</strong>
             </div>
             <div class="metric compact">
+              <span>沃尔玛</span>
+              <strong id="historyWalmartTransactionMetric">0</strong>
+            </div>
+            <div class="metric compact">
+              <span>港杂费</span>
+              <strong id="historyPortFeeMetric">0</strong>
+            </div>
+            <div class="metric compact">
               <span>需复核</span>
               <strong id="historyReviewMetric">0</strong>
             </div>
@@ -508,6 +758,8 @@
                   <option value="shipment_pdf">货件 PDF</option>
                   <option value="report_pdf">汇总报告 PDF</option>
                   <option value="transaction_csv">交易明细 CSV</option>
+                  <option value="walmart_transaction">沃尔玛交易数据</option>
+                  <option value="port_fee_pdf">港杂费 PDF</option>
                 </select>
               </label>
               <button id="clearHistoryFilter" class="button secondary compact" type="button" disabled>清空筛选</button>
@@ -655,6 +907,16 @@
           <h2>交易明细</h2>
           <p>清洗 CSV/XLSX 并生成总表和审计</p>
         </div>
+        <div class="inspector-section hidden" data-inspector-panel="walmartTransaction">
+          <span class="section-label">沃尔玛</span>
+          <h2>交易数据</h2>
+          <p>清洗财务报表 Excel 并生成经营数据总表</p>
+        </div>
+        <div class="inspector-section hidden" data-inspector-panel="portFee">
+          <span class="section-label">港杂费</span>
+          <h2>港杂费</h2>
+          <p>提取发票主信息与费用明细</p>
+        </div>
         <div class="inspector-section hidden" data-inspector-panel="history">
           <span class="section-label">历史</span>
           <h2>历史任务</h2>
@@ -668,6 +930,6 @@
       </aside>
     </div>
 
-    <script src="/static/app.js?v=20260705-task-buttons-clickable"></script>
+    <script src="/static/app.js?v=20260705-walmart-transaction"></script>
   </body>
 </html>

@@ -206,13 +206,26 @@ def package_by_factory(records: list[ShipmentRecord], output_dir: Path, batch_id
     for factory_name, factory_records in sorted(groups.items()):
         zip_name = f"{_sanitize_filename_part(factory_name)}-{batch_id}.zip"
         zip_path = package_root / zip_name
+        country_names = _unique_sorted([
+            _shipment_country_name(record)
+            for record in factory_records
+        ])
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            used_arcnames: set[str] = set()
             for record in factory_records:
-                archive.write(record.source_path, arcname=record.original_filename)
+                country_name = _shipment_country_name(record)
+                country_dir = _sanitize_filename_part(country_name) or "未识别国家"
+                arcname = _unique_zip_arcname(
+                    used_arcnames,
+                    f"{country_dir}/{_sanitize_filename_part(record.original_filename) or record.original_filename}",
+                )
+                archive.write(record.source_path, arcname=arcname)
         packages.append(
             {
                 "factory_name": factory_name,
                 "file_count": len(factory_records),
+                "country_count": len(country_names),
+                "countries": country_names,
                 "zip_filename": zip_name,
                 "zip_path": str(zip_path),
             }
@@ -223,3 +236,26 @@ def package_by_factory(records: list[ShipmentRecord], output_dir: Path, batch_id
         "packages": packages,
         "skipped": skipped,
     }
+
+
+def _unique_sorted(values: list[str]) -> list[str]:
+    return sorted({value for value in values if value})
+
+
+def _shipment_country_name(record: ShipmentRecord) -> str:
+    return record.destination_country or record.filename_info.country or "未识别国家"
+
+
+def _unique_zip_arcname(used_arcnames: set[str], arcname: str) -> str:
+    path = Path(arcname)
+    parent = path.parent.as_posix()
+    stem = path.stem
+    suffix = path.suffix
+    candidate = path.as_posix()
+    index = 2
+    while candidate in used_arcnames:
+        name = f"{stem}-{index}{suffix}"
+        candidate = f"{parent}/{name}" if parent and parent != "." else name
+        index += 1
+    used_arcnames.add(candidate)
+    return candidate

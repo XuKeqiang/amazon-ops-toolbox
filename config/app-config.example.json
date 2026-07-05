@@ -11,7 +11,8 @@
     "user_store": "data/users.json",
     "allowed_input_roots": [
       "/Users/xukeqiang/Documents/Amazon_Data_Management",
-      "/Users/xukeqiang/Documents/Amazon_Data_Process"
+      "/Users/xukeqiang/Documents/Amazon_Data_Process",
+      "/Users/xukeqiang/Downloads"
     ]
   },
   "limits": {

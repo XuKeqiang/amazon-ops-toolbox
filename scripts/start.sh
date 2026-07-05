@@ -14,7 +14,27 @@ if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" >/dev/null 2>&1; then
   exit 0
 fi
 
-nohup "$ROOT_DIR/scripts/run-server.sh" >> "$LOG_DIR/server.log" 2>&1 &
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  PYTHON="$ROOT_DIR/.venv/bin/python"
+elif [[ -x "/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3" ]]; then
+  PYTHON="/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
+else
+  PYTHON="${PYTHON:-python3}"
+fi
+
+ARGS=()
+if [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then
+  ARGS+=(--host "$AMAZON_TOOLBOX_HOST")
+fi
+if [[ -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
+  ARGS+=(--port "$AMAZON_TOOLBOX_PORT")
+fi
+
+if [[ ${#ARGS[@]} -gt 0 ]]; then
+  nohup "$PYTHON" -m app.amazon_toolbox.server "${ARGS[@]}" >> "$LOG_DIR/server.log" 2>&1 &
+else
+  nohup "$PYTHON" -m app.amazon_toolbox.server >> "$LOG_DIR/server.log" 2>&1 &
+fi
 echo "$!" > "$PID_FILE"
 echo "Amazon Operations Toolbox started with PID $(cat "$PID_FILE")."
 echo "Host, port and limits are read from config/app-config.json unless AMAZON_TOOLBOX_HOST or AMAZON_TOOLBOX_PORT is set."
