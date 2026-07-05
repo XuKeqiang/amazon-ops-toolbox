@@ -22,11 +22,11 @@ if (Test-Path $PidFile) {
 }
 
 $VenvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
-if (Test-Path $VenvPython) {
-  $Python = $VenvPython
-} else {
-  $Python = "python"
+if (-not (Test-Path $VenvPython)) {
+  Write-Host "未找到 .venv\Scripts\python.exe。请先运行：powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1"
+  exit 1
 }
+$Python = $VenvPython
 
 $Arguments = @("-m", "app.amazon_toolbox.server")
 if ($env:AMAZON_TOOLBOX_HOST) {

@@ -1,11 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import warnings
-
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="cgi")
-
-import cgi
 import json
 import mimetypes
 import shutil
@@ -13,6 +8,8 @@ import uuid
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
+from email.parser import BytesParser
+from email.policy import default as email_default_policy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
@@ -74,6 +71,12 @@ class BatchState:
     created_at: str
     owner_id: str
     owner_name: str
+
+
+@dataclass
+class UploadedFile:
+    filename: str
+    content: bytes
 
 
 BATCHES: dict[str, BatchState] = {}
@@ -590,58 +593,64 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         )
         self._send_json(_report_job_payload(job))
 
-    def _save_report_upload_for_preflight(self) -> dict:
+    def _read_multipart_files(self, content_type: str, content_length: int) -> list[UploadedFile]:
+        body = self.rfile.read(content_length)
+        header = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8")
+        message = BytesParser(policy=email_default_policy).parsebytes(header + body)
+        if not message.is_multipart():
+            return []
+        files: list[UploadedFile] = []
+        for part in message.iter_parts():
+            disposition = part.get_content_disposition()
+            field_name = part.get_param("name", header="content-disposition")
+            filename = part.get_filename()
+            if disposition != "form-data" or field_name != "files" or not filename:
+                continue
+            files.append(UploadedFile(filename=filename, content=part.get_payload(decode=True) or b""))
+        return files
+
+    def _save_uploaded_files(self, upload_dir: Path, allowed_suffixes: set[str], empty_error: str) -> dict:
         content_length = int(self.headers.get("Content-Length", "0") or "0")
         if content_length > CONFIG.max_upload_bytes:
-            return {"error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB", "status": 413}
+            return {
+                "error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB",
+                "status": 413,
+            }
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
             return {"error": "请上传 multipart/form-data 文件", "status": 400}
 
-        preflight_id = _new_batch_id()
-        upload_dir = UPLOAD_ROOT / f"{preflight_id}-report-pdf"
         upload_dir.mkdir(parents=True, exist_ok=True)
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-            },
-        )
+        files = self._read_multipart_files(content_type, content_length)
+
         received = saved = skipped = renamed = 0
         skipped_paths: list[str] = []
-        files = form["files"] if "files" in form else []
-        if not isinstance(files, list):
-            files = [files]
         for item in files:
             received += 1
-            raw_filename = getattr(item, "filename", "")
-            upload_path = _safe_upload_relative_path(raw_filename)
-            if upload_path is None or upload_path.suffix.lower() != ".pdf":
+            upload_path = _safe_upload_relative_path(item.filename)
+            if upload_path is None or upload_path.suffix.lower() not in allowed_suffixes:
                 skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
+                skipped_paths.append(_upload_display_path(item.filename))
                 continue
             target = _unique_upload_target(upload_dir / upload_path)
             if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
                 renamed += 1
             target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("wb") as handle:
-                shutil.copyfileobj(item.file, handle)
+            target.write_bytes(item.content)
             saved += 1
+
         if saved == 0:
             shutil.rmtree(upload_dir, ignore_errors=True)
             return {
-                "error": "没有收到 PDF 文件",
-                "status": 400,
+                "error": empty_error,
                 "received": received,
+                "saved": saved,
                 "skipped": skipped,
                 "skipped_paths": skipped_paths,
+                "status": 400,
             }
+
         return {
-            "preflight_id": preflight_id,
-            "upload_dir": str(upload_dir),
             "received": received,
             "saved": saved,
             "skipped": skipped,
@@ -649,92 +658,42 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             "renamed": renamed,
         }
 
+    def _save_report_upload_for_preflight(self) -> dict:
+        preflight_id = _new_batch_id()
+        upload_dir = UPLOAD_ROOT / f"{preflight_id}-report-pdf"
+        saved_upload = self._save_uploaded_files(upload_dir, {".pdf"}, "没有收到 PDF 文件")
+        if "error" in saved_upload:
+            return saved_upload
+        return {
+            "preflight_id": preflight_id,
+            "upload_dir": str(upload_dir),
+            **saved_upload,
+        }
+
     def _handle_report_upload(self) -> None:
         user = self._require_auth()
         if not user:
             return
-        content_length = int(self.headers.get("Content-Length", "0") or "0")
-        if content_length > CONFIG.max_upload_bytes:
-            self._send_json(
-                {"error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB"},
-                status=413,
-            )
-            return
-        content_type = self.headers.get("Content-Type", "")
-        if "multipart/form-data" not in content_type:
-            self._send_json({"error": "请上传 multipart/form-data 文件"}, status=400)
-            return
 
         job_id = _new_batch_id()
         upload_dir = UPLOAD_ROOT / f"{job_id}-report-pdf"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-            },
-        )
-
-        received = 0
-        saved = 0
-        skipped = 0
-        skipped_paths: list[str] = []
-        renamed = 0
-        files = form["files"] if "files" in form else []
-        if not isinstance(files, list):
-            files = [files]
-        for item in files:
-            received += 1
-            raw_filename = getattr(item, "filename", "")
-            upload_path = _safe_upload_relative_path(raw_filename)
-            if upload_path is None:
-                skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
-                continue
-            if upload_path.suffix.lower() != ".pdf":
-                skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
-                continue
-            target = _unique_upload_target(upload_dir / upload_path)
-            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
-                renamed += 1
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("wb") as handle:
-                shutil.copyfileobj(item.file, handle)
-            saved += 1
-
-        if saved == 0:
-            shutil.rmtree(upload_dir, ignore_errors=True)
-            self._send_json({
-                "error": "没有收到 PDF 文件",
-                "received": received,
-                "skipped": skipped,
-                "skipped_paths": skipped_paths,
-            }, status=400)
+        saved_upload = self._save_uploaded_files(upload_dir, {".pdf"}, "没有收到 PDF 文件")
+        if "error" in saved_upload:
+            self._send_json(saved_upload, status=saved_upload.get("status", 400))
             return
 
         OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
         output_path = OUTPUT_ROOT / f"{job_id}-amazon-report-pdf-results.xlsx"
         job = process_report_folder(upload_dir, output_path, job_id)
         job.source_label = f"上传批次 {job_id}"
+        job.summary.update(saved_upload)
         REPORT_JOBS[job.job_id] = job
         _record_history(
             task_id=job.job_id,
             task_type="report_pdf",
             title="汇总报告 PDF",
             source_label=f"上传批次 {job_id}",
-            summary={
-                **job.summary,
-                "received": received,
-                "saved": saved,
-                "skipped": skipped,
-                "skipped_paths": skipped_paths,
-                "renamed": renamed,
-            },
+            summary=job.summary,
             status="需复核" if job.summary.get("warnings") else "完成",
             downloads=[{"label": "Excel 工作簿", "url": f"/api/report-pdf/download?job_id={job.job_id}"}],
             owner=user,
@@ -746,7 +705,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             target_id=job.job_id,
             target_type="report_pdf",
             message=f"上传并处理汇总报告 PDF：{job_id}",
-            payload={"received": received, "saved": saved, "skipped": skipped, "skipped_paths": skipped_paths, **job.summary},
+            payload=job.summary,
         )
         self._send_json(_report_job_payload(job))
 
@@ -986,61 +945,12 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         user = self._require_auth()
         if not user:
             return
-        content_length = int(self.headers.get("Content-Length", "0") or "0")
-        if content_length > CONFIG.max_upload_bytes:
-            self._send_json(
-                {"error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB"},
-                status=413,
-            )
-            return
-        content_type = self.headers.get("Content-Type", "")
-        if "multipart/form-data" not in content_type:
-            self._send_json({"error": "请上传 multipart/form-data 文件"}, status=400)
-            return
 
         job_id = _new_batch_id()
         upload_dir = UPLOAD_ROOT / f"{job_id}-port-fee-pdf"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-            },
-        )
-
-        received = saved = skipped = renamed = 0
-        skipped_paths: list[str] = []
-        files = form["files"] if "files" in form else []
-        if not isinstance(files, list):
-            files = [files]
-        for item in files:
-            received += 1
-            raw_filename = getattr(item, "filename", "")
-            upload_path = _safe_upload_relative_path(raw_filename)
-            if upload_path is None or upload_path.suffix.lower() != ".pdf":
-                skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
-                continue
-            target = _unique_upload_target(upload_dir / upload_path)
-            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
-                renamed += 1
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("wb") as handle:
-                shutil.copyfileobj(item.file, handle)
-            saved += 1
-
-        if saved == 0:
-            shutil.rmtree(upload_dir, ignore_errors=True)
-            self._send_json({
-                "error": "没有收到 PDF 文件",
-                "received": received,
-                "saved": saved,
-                "skipped": skipped,
-                "skipped_paths": skipped_paths,
-            }, status=400)
+        saved_upload = self._save_uploaded_files(upload_dir, {".pdf"}, "没有收到 PDF 文件")
+        if "error" in saved_upload:
+            self._send_json(saved_upload, status=saved_upload.get("status", 400))
             return
 
         self._process_port_fee_folder_for_user(
@@ -1048,13 +958,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             user,
             source_label=f"上传批次 {job_id}",
             job_id=job_id,
-            upload_summary={
-                "received": received,
-                "saved": saved,
-                "skipped": skipped,
-                "skipped_paths": skipped_paths,
-                "renamed": renamed,
-            },
+            upload_summary=saved_upload,
         )
 
     def _process_port_fee_folder_for_user(
@@ -1096,135 +1000,25 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         self._send_json(_port_fee_job_payload(job))
 
     def _save_table_upload(self, upload_dir: Path, allowed_suffixes: set[str], empty_error: str) -> dict:
-        content_length = int(self.headers.get("Content-Length", "0") or "0")
-        if content_length > CONFIG.max_upload_bytes:
-            return {
-                "error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB",
-                "status": 413,
-            }
-        content_type = self.headers.get("Content-Type", "")
-        if "multipart/form-data" not in content_type:
-            return {"error": "请上传 multipart/form-data 文件", "status": 400}
-
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-            },
-        )
-
-        received = saved = skipped = renamed = 0
-        skipped_paths: list[str] = []
-        files = form["files"] if "files" in form else []
-        if not isinstance(files, list):
-            files = [files]
-        for item in files:
-            received += 1
-            raw_filename = getattr(item, "filename", "")
-            upload_path = _safe_upload_relative_path(raw_filename)
-            if upload_path is None or upload_path.suffix.lower() not in allowed_suffixes:
-                skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
-                continue
-            target = _unique_upload_target(upload_dir / upload_path)
-            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
-                renamed += 1
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("wb") as handle:
-                shutil.copyfileobj(item.file, handle)
-            saved += 1
-
-        if saved == 0:
-            shutil.rmtree(upload_dir, ignore_errors=True)
-            return {
-                "error": empty_error,
-                "received": received,
-                "saved": saved,
-                "skipped": skipped,
-                "skipped_paths": skipped_paths,
-                "status": 400,
-            }
-
-        return {
-            "received": received,
-            "saved": saved,
-            "skipped": skipped,
-            "skipped_paths": skipped_paths,
-            "renamed": renamed,
-        }
+        return self._save_uploaded_files(upload_dir, allowed_suffixes, empty_error)
 
     def _handle_upload(self) -> None:
         user = self._require_auth()
         if not user:
             return
-        content_length = int(self.headers.get("Content-Length", "0") or "0")
-        if content_length > CONFIG.max_upload_bytes:
-            self._send_json(
-                {"error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB"},
-                status=413,
-            )
-            return
-        content_type = self.headers.get("Content-Type", "")
-        if "multipart/form-data" not in content_type:
-            self._send_json({"error": "请上传 multipart/form-data 文件"}, status=400)
-            return
 
         batch_id = _new_batch_id()
         upload_dir = UPLOAD_ROOT / batch_id
-        upload_dir.mkdir(parents=True, exist_ok=True)
-
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-            },
-        )
-
-        received = 0
-        saved = 0
-        skipped = 0
-        skipped_paths: list[str] = []
-        renamed = 0
-        files = form["files"] if "files" in form else []
-        if not isinstance(files, list):
-            files = [files]
-        for item in files:
-            received += 1
-            raw_filename = getattr(item, "filename", "")
-            upload_path = _safe_upload_relative_path(raw_filename)
-            if upload_path is None:
-                skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
-                continue
-            if upload_path.suffix.lower() != ".pdf":
-                skipped += 1
-                skipped_paths.append(_upload_display_path(raw_filename))
-                continue
-            target = _unique_upload_target(upload_dir / upload_path)
-            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
-                renamed += 1
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("wb") as handle:
-                shutil.copyfileobj(item.file, handle)
-            saved += 1
-
-        if saved == 0:
-            shutil.rmtree(upload_dir, ignore_errors=True)
+        saved_upload = self._save_uploaded_files(upload_dir, {".pdf"}, "没有收到 PDF 文件")
+        if "error" in saved_upload:
             self._send_json({
-                "error": "没有收到 PDF 文件",
+                "error": saved_upload["error"],
                 "logs": [
-                    {"level": "info", "message": f"收到 {received} 个上传文件"},
-                    {"level": "warning", "message": f"跳过 {skipped} 个非 PDF 或无效文件"},
-                    *_skipped_path_logs(skipped_paths),
+                    {"level": "info", "message": f"收到 {saved_upload.get('received', 0)} 个上传文件"},
+                    {"level": "warning", "message": f"跳过 {saved_upload.get('skipped', 0)} 个非 PDF 或无效文件"},
+                    *_skipped_path_logs(saved_upload.get("skipped_paths", [])),
                 ],
-            }, status=400)
+            }, status=saved_upload.get("status", 400))
             return
 
         records = scan_folder(upload_dir)
@@ -1236,17 +1030,17 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             target_id=batch.batch_id,
             target_type="shipment_pdf",
             message=f"上传并扫描货件 PDF：{batch_id}",
-            payload={"received": received, "saved": saved, "skipped": skipped, "skipped_paths": skipped_paths, "records": len(records)},
+            payload={**saved_upload, "records": len(records)},
         )
         logs = [
-            {"level": "info", "message": f"收到 {received} 个上传文件"},
-            {"level": "success", "message": f"保存 {saved} 个 PDF 到上传批次 {batch_id}"},
+            {"level": "info", "message": f"收到 {saved_upload['received']} 个上传文件"},
+            {"level": "success", "message": f"保存 {saved_upload['saved']} 个 PDF 到上传批次 {batch_id}"},
         ]
-        if skipped:
-            logs.append({"level": "warning", "message": f"跳过 {skipped} 个非 PDF 或无效文件"})
-            logs.extend(_skipped_path_logs(skipped_paths))
-        if renamed:
-            logs.append({"level": "warning", "message": f"发现 {renamed} 个重名 PDF，已自动加序号保存"})
+        if saved_upload["skipped"]:
+            logs.append({"level": "warning", "message": f"跳过 {saved_upload['skipped']} 个非 PDF 或无效文件"})
+            logs.extend(_skipped_path_logs(saved_upload["skipped_paths"]))
+        if saved_upload["renamed"]:
+            logs.append({"level": "warning", "message": f"发现 {saved_upload['renamed']} 个重名 PDF，已自动加序号保存"})
         logs.append({"level": "success", "message": f"扫描完成：识别到 {len(records)} 个 PDF"})
         self._send_json(_batch_payload(batch, logs=logs))
 

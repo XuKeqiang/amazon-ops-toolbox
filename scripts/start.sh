@@ -14,11 +14,11 @@ if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" >/dev/null 2>&1; then
   exit 0
 fi
 
-if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
-  PYTHON="$ROOT_DIR/.venv/bin/python"
-else
-  PYTHON="${PYTHON:-python3}"
+if [[ ! -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  echo "未找到 .venv/bin/python。请先运行：bash scripts/setup-cn.sh"
+  exit 1
 fi
+PYTHON="$ROOT_DIR/.venv/bin/python"
 
 ARGS=()
 if [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then

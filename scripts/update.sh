@@ -11,12 +11,7 @@ fi
 
 git pull --ff-only
 
-if [[ ! -d ".venv" ]]; then
-  python3 -m venv .venv
-fi
-
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+bash scripts/setup-cn.sh
 
 bash scripts/stop.sh
 bash scripts/start.sh

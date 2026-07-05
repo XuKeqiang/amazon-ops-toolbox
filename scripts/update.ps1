@@ -10,12 +10,7 @@ if (-not (Test-Path ".git")) {
 
 git pull --ff-only
 
-if (-not (Test-Path ".venv")) {
-  python -m venv .venv
-}
-
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1

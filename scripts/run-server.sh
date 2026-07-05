@@ -8,11 +8,11 @@ PID_FILE="$ROOT_DIR/data/server.pid"
 mkdir -p "$ROOT_DIR/data"
 echo "$$" > "$PID_FILE"
 
-if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
-  PYTHON="$ROOT_DIR/.venv/bin/python"
-else
-  PYTHON="${PYTHON:-python3}"
+if [[ ! -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  echo "未找到 .venv/bin/python。请先运行：bash scripts/setup-cn.sh"
+  exit 1
 fi
+PYTHON="$ROOT_DIR/.venv/bin/python"
 
 if [[ -n "${AMAZON_TOOLBOX_HOST:-}" && -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
   exec "$PYTHON" -m app.amazon_toolbox.server --host "$AMAZON_TOOLBOX_HOST" --port "$AMAZON_TOOLBOX_PORT"

@@ -63,29 +63,42 @@ cd amazon-ops-toolbox
 
 ### 4. 安装 Python 依赖
 
-第一次部署需要创建虚拟环境并安装依赖：
+第一次部署建议直接运行国内镜像安装脚本。脚本会检查 Python 版本、创建 `.venv` 虚拟环境、使用清华 PyPI 镜像安装依赖，并自动创建 `config/app-config.json`。
+
+推荐 Python 3.11 或 3.12。Python 版本太旧会安装失败；系统全局 Python 和项目 `.venv` 混用也容易导致依赖缺失，所以后续启动脚本会固定使用 `.venv`。
 
 macOS：
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+bash scripts/setup-cn.sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
 ```
 
-如果安装过程没有报错，就可以进入下一步。
+如果公司网络无法访问清华镜像，可以临时换成阿里云镜像：
+
+macOS：
+
+```bash
+PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple bash scripts/setup-cn.sh
+```
+
+Windows PowerShell：
+
+```powershell
+$env:PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
+```
+
+如果安装过程没有报错，就可以进入下一步。熟悉 Python 的维护者也可以手动创建 `.venv` 后运行 `pip install -r requirements.txt`，但日常部署优先使用上面的脚本。
 
 ### 5. 创建配置文件
 
-复制一份配置模板：
+如果第 4 步使用了 `setup-cn` 脚本，通常已经自动创建了 `config/app-config.json`。如果没有，再手动复制一份配置模板：
 
 macOS：
 
@@ -316,6 +329,30 @@ Windows PowerShell：
 Get-Content data\logs\server.err.log -Tail 80
 Get-Content data\logs\server.out.log -Tail 80
 ```
+
+### 启动日志出现 `ModuleNotFoundError: No module named 'cgi'`
+
+这是 Python 3.13 移除了旧版 `cgi` 标准库导致的错误。当前项目代码已经移除了对 `cgi` 的依赖。如果仍然看到这个错误，说明服务器上还在运行旧代码或旧进程：
+
+macOS：
+
+```bash
+git pull --ff-only
+bash scripts/setup-cn.sh
+bash scripts/stop.sh
+bash scripts/start.sh
+```
+
+Windows PowerShell：
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
+```
+
+如果仍然失败，优先安装 Python 3.11 或 3.12 后删除 `.venv`，再重新运行 `setup-cn` 脚本。
 
 ### 同事电脑访问不了
 
