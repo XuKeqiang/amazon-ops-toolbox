@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from app.amazon_toolbox.report_pdf.batch import _duplicate_report_keys, _result_row
+from app.amazon_toolbox.report_pdf.batch import _duplicate_report_keys, _result_row, _store_initial_mismatch
 from app.amazon_toolbox.report_pdf.extract_amazon_reports import collect_pdfs
 
 
@@ -66,6 +66,16 @@ class ReportPdfBatchTest(TestCase):
         self.assertEqual(rows[0][1], "TARNABY")
         self.assertEqual(rows[0][2], "德国")
         self.assertEqual(rows[0][3], "DE")
+
+    def test_store_initial_mismatch_warns_when_filename_and_pdf_initial_differ(self) -> None:
+        warning = _store_initial_mismatch("VINAEMO", "Keebofly")
+
+        self.assertIn("店铺首字母不一致", warning)
+        self.assertIn("V", warning)
+        self.assertIn("K", warning)
+
+    def test_store_initial_mismatch_ignores_case_only_difference(self) -> None:
+        self.assertEqual(_store_initial_mismatch("bikoney", "Bikoney"), "")
 
 
 def _fake_result(source_file: str) -> dict:

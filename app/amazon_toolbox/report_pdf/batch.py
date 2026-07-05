@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import traceback
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,12 +21,19 @@ class ReportPdfJob:
 def preflight_report_folder(folder: Path) -> dict:
     pdfs = report_parser.collect_pdfs(str(folder))
     issues: list[dict] = []
+    store_initial_mismatches: list[dict] = []
     preview_rows: list[dict] = []
     for pdf_path, store, country, country_code in pdfs:
         try:
             result = report_parser.extract_pdf(pdf_path, store, country, country_code)
             meta = result["meta"]
             row_issues = []
+            initial_mismatch = _store_initial_mismatch(
+                meta.get("filename_store") or store,
+                meta.get("display_name") or "",
+            )
+            if initial_mismatch:
+                row_issues.append(initial_mismatch)
             for key in ("store_audit_status", "country_audit_status", "filename_audit_status"):
                 value = meta.get(key) or ""
                 if value and not value.startswith("✓") and "足够唯一" not in value:
@@ -46,6 +54,13 @@ def preflight_report_folder(folder: Path) -> dict:
             preview_rows.append(row)
             if row_issues:
                 issues.append(row)
+            if initial_mismatch:
+                store_initial_mismatches.append({
+                    "source_file": row["source_file"],
+                    "filename_store": row["filename_store"],
+                    "pdf_store": row["pdf_store"],
+                    "issue": initial_mismatch,
+                })
         except Exception as exc:
             issues.append({
                 "source_file": Path(pdf_path).name,
@@ -58,6 +73,8 @@ def preflight_report_folder(folder: Path) -> dict:
         "processable": len(pdfs),
         "issues": issues,
         "issue_count": len(issues),
+        "store_initial_mismatch_count": len(store_initial_mismatches),
+        "store_initial_mismatches": store_initial_mismatches,
         "preview": preview_rows[:20],
     }
 
@@ -198,6 +215,25 @@ def _duplicate_report_keys(results: list[dict]) -> dict[tuple, list[str]]:
         )
         duplicate_keys.setdefault(key, []).append(meta.get("source_file") or "")
     return duplicate_keys
+
+
+def _store_initial_mismatch(filename_store: str, pdf_store: str) -> str:
+    filename_initial = _first_brand_initial(filename_store)
+    pdf_initial = _first_brand_initial(pdf_store)
+    if filename_initial and pdf_initial and filename_initial != pdf_initial:
+        return (
+            f"店铺首字母不一致：文件名/目录店铺 {filename_store} 首字母 {filename_initial}，"
+            f"PDF Display name {pdf_store} 首字母 {pdf_initial}"
+        )
+    return ""
+
+
+def _first_brand_initial(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value or "").strip()
+    for char in normalized:
+        if char.isalnum():
+            return char.upper()
+    return ""
 
 
 def _count_pdf_files(folder: Path) -> int:

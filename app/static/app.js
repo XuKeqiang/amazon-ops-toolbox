@@ -1528,6 +1528,9 @@ async function handleReportPreflightResponse(response) {
   }
   logSkippedServerPaths(payload.skipped_paths, addReportLog);
   addReportLog(`预检完成：${payload.processable || 0} 个可处理 PDF，发现 ${payload.issue_count || 0} 个需确认文件`, payload.issue_count ? "warning" : "success");
+  if (payload.store_initial_mismatch_count) {
+    addReportLog(`店铺首字母不一致：${payload.store_initial_mismatch_count} 个文件需要先确认`, "warning");
+  }
   (payload.issues || []).slice(0, 5).forEach((item) => {
     addReportLog(`${item.source_file}：${(item.issues || []).join("；")}`, "warning");
   });
@@ -1539,13 +1542,27 @@ async function handleReportPreflightResponse(response) {
 
 function confirmReportPreflight(preflight) {
   const issues = preflight.issues || [];
+  const storeInitialMismatches = preflight.store_initial_mismatches || [];
   const lines = [
     `预检完成：${preflight.processable || 0} 个可处理 PDF。`,
     issues.length ? `发现 ${issues.length} 个文件存在店铺/国家/期间等信息不一致或无法确认。` : "未发现明显店铺、国家或期间冲突。",
   ];
+  if (storeInitialMismatches.length) {
+    lines.push("");
+    lines.push(`重点提醒：${storeInitialMismatches.length} 个文件的文件名店铺首字母与 PDF Display name 首字母不一致。`);
+    storeInitialMismatches.slice(0, 6).forEach((item) => {
+      lines.push(`- ${item.source_file}: 文件名/目录 ${item.filename_store || "-"}，PDF ${item.pdf_store || "-"}`);
+    });
+    if (storeInitialMismatches.length > 6) {
+      lines.push(`...还有 ${storeInitialMismatches.length - 6} 个首字母不一致文件。`);
+    }
+  }
+  lines.push("");
+  lines.push("其他预检问题：");
   issues.slice(0, 8).forEach((item) => {
     lines.push(`- ${item.source_file}: ${(item.issues || []).join("；")}`);
   });
+  if (!issues.length) lines.push("- 无");
   if (issues.length > 8) lines.push(`...还有 ${issues.length - 8} 个问题文件。`);
   lines.push("");
   lines.push("是否继续生成 Excel？");

@@ -1143,10 +1143,8 @@ def extract_pdf(pdf_path, store, country, country_code=None):
     meta["display_name"] = names["display_name"]
     meta["legal_name"] = names["legal_name"]
     if meta["display_name"]:
-        meta["store"] = meta["display_name"]
-        meta["store_source"] = "pdf_display_name"
         if store and store.lower() != meta["display_name"].lower():
-            meta["store_audit_status"] = f"文件名/目录店铺 {store} 与 PDF Display name {meta['display_name']} 不一致，已采用 PDF 正文"
+            meta["store_audit_status"] = f"文件名/目录店铺 {store} 与 PDF Display name {meta['display_name']} 不一致，已采用文件名/目录"
         else:
             meta["store_audit_status"] = "✓ 文件名/目录店铺与 PDF Display name 一致"
     else:
