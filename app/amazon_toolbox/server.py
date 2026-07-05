@@ -30,7 +30,7 @@ from .auth import (
     validate_role,
     verify_password,
 )
-from .config import APP_ROOT, PROJECT_ROOT, STATIC_ROOT, load_config
+from .config import APP_ROOT, DEFAULT_INPUT_ROOT, PROJECT_ROOT, STATIC_ROOT, load_config
 from .port_fee_pdf.batch import PortFeePdfJob, process_port_fee_folder
 from .report_pdf.batch import ReportPdfJob, preflight_report_folder, process_report_folder
 from .shipment_pdf.batch import (
@@ -2169,6 +2169,7 @@ def run(host: str | None = None, port: int | None = None) -> None:
     host = host or CONFIG.host
     port = port or CONFIG.port
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    DEFAULT_INPUT_ROOT.mkdir(parents=True, exist_ok=True)
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     CONFIG.backup_root.mkdir(parents=True, exist_ok=True)

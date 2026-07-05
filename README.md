@@ -106,6 +106,17 @@ Copy-Item config\app-config.example.json config\app-config.json
 - `paths.allowed_input_roots`：允许系统扫描的服务器文件夹白名单。
 - `limits.max_upload_mb`：单次上传大小限制。
 
+`paths.allowed_input_roots` 默认只包含项目内的 `data/input`。如果运营文件放在服务器上的其他目录，一定要改成你自己电脑或公司服务器的真实路径。系统只会扫描这个白名单里的目录，避免误读其他文件。
+
+macOS 路径示例：
+
+```json
+"allowed_input_roots": [
+  "/Users/Shared/EcommerceData",
+  "/Volumes/Operations/Amazon"
+]
+```
+
 Windows 路径建议在配置里写成这种形式：
 
 ```json
@@ -115,7 +126,7 @@ Windows 路径建议在配置里写成这种形式：
 ]
 ```
 
-如果不确定怎么改，先保持默认配置也可以启动。
+如果不确定怎么改，先保持默认配置也可以启动；但只能扫描项目目录下的 `data/input`。拖放上传、选择文件、选择文件夹不依赖这个白名单。
 
 ### 6. 设置管理员初始密码
 

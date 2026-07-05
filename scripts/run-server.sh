@@ -10,8 +10,6 @@ echo "$$" > "$PID_FILE"
 
 if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
   PYTHON="$ROOT_DIR/.venv/bin/python"
-elif [[ -x "/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3" ]]; then
-  PYTHON="/Users/xukeqiang/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
 else
   PYTHON="${PYTHON:-python3}"
 fi

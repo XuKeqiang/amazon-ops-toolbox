@@ -30,7 +30,7 @@ MERGED_QUARTERLY_DIR = OUTPUT_DIR / "merged_quarterly_backup"
 REFERENCE_RULE_PATH = Path(
     os.environ.get(
         "AMAZON_RECORD_TYPE_REFERENCE",
-        "/Users/xukeqiang/Desktop/记录类型修正参考表.xlsx",
+        str(ROOT / "config" / "record_type_reference.xlsx"),
     )
 )
 
