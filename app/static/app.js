@@ -26,6 +26,8 @@ const state = {
   selectedHistoryTaskIds: new Set(),
   pendingShipmentFiles: [],
   pendingReportFiles: [],
+  pendingTransactionFiles: [],
+  pendingWalmartTransactionFiles: [],
   pendingPortFeeFiles: [],
   reportRows: [],
   transactionRows: [],
@@ -142,8 +144,15 @@ const els = {
   retryReportTask: document.querySelector("#retryReportTask"),
   clearReportResult: document.querySelector("#clearReportResult"),
   transactionFolderForm: document.querySelector("#transactionFolderForm"),
+  transactionUploadForm: document.querySelector("#transactionUploadForm"),
+  transactionFileInput: document.querySelector("#transactionFileInput"),
+  transactionFolderUploadInput: document.querySelector("#transactionFolderUploadInput"),
+  transactionDropTarget: document.querySelector("#transactionDropTarget"),
+  transactionUploadSelectionText: document.querySelector("#transactionUploadSelectionText"),
+  transactionUploadPickers: document.querySelectorAll("[data-transaction-upload-picker]"),
   transactionFolderInput: document.querySelector("#transactionFolderInput"),
   transactionSubmitButton: document.querySelector('#transactionFolderForm button[type="submit"]'),
+  transactionUploadSubmitButton: document.querySelector('#transactionUploadForm button[type="submit"]'),
   transactionFilesMetric: document.querySelector("#transactionFilesMetric"),
   transactionRowsMetric: document.querySelector("#transactionRowsMetric"),
   transactionCountriesMetric: document.querySelector("#transactionCountriesMetric"),
@@ -159,8 +168,15 @@ const els = {
   retryTransactionTask: document.querySelector("#retryTransactionTask"),
   clearTransactionResult: document.querySelector("#clearTransactionResult"),
   walmartTransactionFolderForm: document.querySelector("#walmartTransactionFolderForm"),
+  walmartTransactionUploadForm: document.querySelector("#walmartTransactionUploadForm"),
+  walmartTransactionFileInput: document.querySelector("#walmartTransactionFileInput"),
+  walmartTransactionFolderUploadInput: document.querySelector("#walmartTransactionFolderUploadInput"),
+  walmartTransactionDropTarget: document.querySelector("#walmartTransactionDropTarget"),
+  walmartTransactionUploadSelectionText: document.querySelector("#walmartTransactionUploadSelectionText"),
+  walmartTransactionUploadPickers: document.querySelectorAll("[data-walmart-transaction-upload-picker]"),
   walmartTransactionFolderInput: document.querySelector("#walmartTransactionFolderInput"),
   walmartTransactionSubmitButton: document.querySelector('#walmartTransactionFolderForm button[type="submit"]'),
+  walmartTransactionUploadSubmitButton: document.querySelector('#walmartTransactionUploadForm button[type="submit"]'),
   walmartTransactionFilesMetric: document.querySelector("#walmartTransactionFilesMetric"),
   walmartTransactionRowsMetric: document.querySelector("#walmartTransactionRowsMetric"),
   walmartTransactionPeriodsMetric: document.querySelector("#walmartTransactionPeriodsMetric"),
@@ -469,6 +485,64 @@ els.clearReportResult.addEventListener("click", () => {
   clearReportResults({ resetInputs: false });
 });
 
+els.transactionUploadPickers.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (button.dataset.transactionUploadPicker === "folder") {
+      els.transactionFolderUploadInput.click();
+      return;
+    }
+    els.transactionFileInput.click();
+  });
+});
+
+els.transactionDropTarget.addEventListener("click", () => {
+  els.transactionFileInput.click();
+});
+
+els.transactionDropTarget.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  els.transactionFileInput.click();
+});
+
+els.transactionFileInput.addEventListener("change", () => {
+  resetTransactionLogs("正在读取选择的交易明细文件...");
+  setPendingTransactionFiles([...els.transactionFileInput.files].map((file) => ({ file, relativePath: file.name })), "已选择文件");
+});
+
+els.transactionFolderUploadInput.addEventListener("change", () => {
+  resetTransactionLogs("正在读取选择的文件夹...");
+  setPendingTransactionFiles(
+    [...els.transactionFolderUploadInput.files].map((file) => ({
+      file,
+      relativePath: file.webkitRelativePath || file.name,
+    })),
+    "已选择文件夹",
+  );
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  els.transactionUploadForm.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    els.transactionUploadForm.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  els.transactionUploadForm.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    if (eventName === "dragleave" && els.transactionUploadForm.contains(event.relatedTarget)) return;
+    els.transactionUploadForm.classList.remove("drag-over");
+  });
+});
+
+els.transactionUploadForm.addEventListener("drop", async (event) => {
+  resetTransactionLogs("正在读取拖放内容...");
+  setTransactionStatus("正在读取拖放内容...");
+  const droppedFiles = await collectDroppedFiles(event.dataTransfer);
+  setPendingTransactionFiles(droppedFiles, "已读取拖放内容");
+});
+
 els.folderForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.shipmentBusy) return;
@@ -689,6 +763,53 @@ els.transactionFolderForm.addEventListener("submit", async (event) => {
   }
 });
 
+els.transactionUploadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.transactionBusy) return;
+  const files = state.pendingTransactionFiles;
+  if (!files.length) {
+    addTransactionLog("请选择至少一个 CSV/XLSX 文件或拖放一个文件夹", "warning");
+    setTransactionStatus("请选择文件或文件夹");
+    return;
+  }
+  const processableCount = files.filter((item) => isTransactionSourceFile(item.file)).length;
+  if (!processableCount) {
+    addTransactionLog("当前选择里没有可处理的 CSV/XLSX 文件，请重新选择", "error");
+    setTransactionStatus("没有可上传的交易明细文件");
+    return;
+  }
+
+  state.lastTransactionTask = () => els.transactionUploadForm.requestSubmit();
+  resetTransactionLogs(`开始上传 ${files.length} 个文件，其中 ${processableCount} 个交易明细文件`);
+  logSkippedUnsupportedFiles(files, addTransactionLog, isTransactionSourceFile, "非 CSV/XLSX");
+  setTransactionBusy(`正在上传并清洗 ${processableCount} 个交易明细文件...`);
+  disableTransactionDownloads();
+  const controller = new AbortController();
+  state.transactionAbortController = controller;
+  updateTransactionBusyControls();
+  const formData = new FormData();
+  files.forEach((item) => formData.append("files", item.file, item.relativePath || item.file.name));
+  try {
+    const response = await fetch("/api/transaction-csv/upload", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    await handleTransactionResponse(response);
+  } catch (error) {
+    if (isAbortError(error)) {
+      addTransactionLog("已终止当前上传清洗任务", "warning");
+      setTransactionStatus("已终止当前任务");
+      return;
+    }
+    addTransactionLog("上传请求失败，请确认服务仍在运行", "error");
+    setTransactionStatus("上传请求失败，请确认服务仍在运行");
+  } finally {
+    clearTransactionAbortController(controller);
+    setTransactionIdle();
+  }
+});
+
 els.cancelTransactionTask.addEventListener("click", () => {
   cancelTransactionTask();
 });
@@ -703,6 +824,64 @@ els.newTransactionTask.addEventListener("click", () => {
 
 els.clearTransactionResult.addEventListener("click", () => {
   clearTransactionResults({ resetInput: false });
+});
+
+els.walmartTransactionUploadPickers.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (button.dataset.walmartTransactionUploadPicker === "folder") {
+      els.walmartTransactionFolderUploadInput.click();
+      return;
+    }
+    els.walmartTransactionFileInput.click();
+  });
+});
+
+els.walmartTransactionDropTarget.addEventListener("click", () => {
+  els.walmartTransactionFileInput.click();
+});
+
+els.walmartTransactionDropTarget.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  els.walmartTransactionFileInput.click();
+});
+
+els.walmartTransactionFileInput.addEventListener("change", () => {
+  resetWalmartTransactionLogs("正在读取选择的沃尔玛财务报表...");
+  setPendingWalmartTransactionFiles([...els.walmartTransactionFileInput.files].map((file) => ({ file, relativePath: file.name })), "已选择文件");
+});
+
+els.walmartTransactionFolderUploadInput.addEventListener("change", () => {
+  resetWalmartTransactionLogs("正在读取选择的文件夹...");
+  setPendingWalmartTransactionFiles(
+    [...els.walmartTransactionFolderUploadInput.files].map((file) => ({
+      file,
+      relativePath: file.webkitRelativePath || file.name,
+    })),
+    "已选择文件夹",
+  );
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  els.walmartTransactionUploadForm.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    els.walmartTransactionUploadForm.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  els.walmartTransactionUploadForm.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    if (eventName === "dragleave" && els.walmartTransactionUploadForm.contains(event.relatedTarget)) return;
+    els.walmartTransactionUploadForm.classList.remove("drag-over");
+  });
+});
+
+els.walmartTransactionUploadForm.addEventListener("drop", async (event) => {
+  resetWalmartTransactionLogs("正在读取拖放内容...");
+  setWalmartTransactionStatus("正在读取拖放内容...");
+  const droppedFiles = await collectDroppedFiles(event.dataTransfer);
+  setPendingWalmartTransactionFiles(droppedFiles, "已读取拖放内容");
 });
 
 els.walmartTransactionFolderForm.addEventListener("submit", async (event) => {
@@ -732,6 +911,53 @@ els.walmartTransactionFolderForm.addEventListener("submit", async (event) => {
     }
     addWalmartTransactionLog("处理请求失败，请确认服务仍在运行", "error");
     setWalmartTransactionStatus("处理请求失败，请确认服务仍在运行");
+  } finally {
+    clearWalmartTransactionAbortController(controller);
+    setWalmartTransactionIdle();
+  }
+});
+
+els.walmartTransactionUploadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.walmartTransactionBusy) return;
+  const files = state.pendingWalmartTransactionFiles;
+  if (!files.length) {
+    addWalmartTransactionLog("请选择至少一个 Excel 文件或拖放一个文件夹", "warning");
+    setWalmartTransactionStatus("请选择文件或文件夹");
+    return;
+  }
+  const processableCount = files.filter((item) => isWalmartTransactionSourceFile(item.file)).length;
+  if (!processableCount) {
+    addWalmartTransactionLog("当前选择里没有可处理的 .xlsx/.xlsm 文件，请重新选择", "error");
+    setWalmartTransactionStatus("没有可上传的沃尔玛财务报表");
+    return;
+  }
+
+  state.lastWalmartTransactionTask = () => els.walmartTransactionUploadForm.requestSubmit();
+  resetWalmartTransactionLogs(`开始上传 ${files.length} 个文件，其中 ${processableCount} 个沃尔玛财务报表`);
+  logSkippedUnsupportedFiles(files, addWalmartTransactionLog, isWalmartTransactionSourceFile, "非 XLSX/XLSM");
+  setWalmartTransactionBusy(`正在上传并清洗 ${processableCount} 个沃尔玛财务报表...`);
+  disableWalmartTransactionDownloads();
+  const controller = new AbortController();
+  state.walmartTransactionAbortController = controller;
+  updateWalmartTransactionBusyControls();
+  const formData = new FormData();
+  files.forEach((item) => formData.append("files", item.file, item.relativePath || item.file.name));
+  try {
+    const response = await fetch("/api/walmart-transaction/upload", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    await handleWalmartTransactionResponse(response);
+  } catch (error) {
+    if (isAbortError(error)) {
+      addWalmartTransactionLog("已终止当前上传清洗任务", "warning");
+      setWalmartTransactionStatus("已终止当前任务");
+      return;
+    }
+    addWalmartTransactionLog("上传请求失败，请确认服务仍在运行", "error");
+    setWalmartTransactionStatus("上传请求失败，请确认服务仍在运行");
   } finally {
     clearWalmartTransactionAbortController(controller);
     setWalmartTransactionIdle();
@@ -1334,9 +1560,11 @@ async function handleTransactionResponse(response) {
   }
   if (!response.ok) {
     addTransactionLog(payload.error || "处理失败", "error");
+    logSkippedServerPaths(payload.skipped_paths, addTransactionLog);
     setTransactionStatus(payload.error || "处理失败");
     return;
   }
+  logSkippedServerPaths(payload.summary.skipped_paths || payload.skipped_paths, addTransactionLog);
   state.transactionJobId = payload.job_id;
   addTransactionLog(`文件读取完成：${payload.summary.source_files || 0} 个源文件`);
   addTransactionLog(`清洗完成：${payload.summary.total_rows || 0} 条明细，覆盖 ${payload.summary.countries || 0} 个国家`);
@@ -1362,9 +1590,11 @@ async function handleWalmartTransactionResponse(response) {
   }
   if (!response.ok) {
     addWalmartTransactionLog(payload.error || "处理失败", "error");
+    logSkippedServerPaths(payload.skipped_paths, addWalmartTransactionLog);
     setWalmartTransactionStatus(payload.error || "处理失败");
     return;
   }
+  logSkippedServerPaths(payload.summary.skipped_paths || payload.skipped_paths, addWalmartTransactionLog);
   state.walmartTransactionJobId = payload.job_id;
   addWalmartTransactionLog(`文件读取完成：${payload.summary.source_files || 0} 个源工作簿，跳过 ${payload.summary.skipped_files || 0} 个非业务文件`);
   addWalmartTransactionLog(`清洗完成：${payload.summary.output_rows || 0} 条明细，覆盖 ${payload.summary.source_periods || 0} 个账期`);
@@ -1493,6 +1723,50 @@ function setPendingReportFiles(items, label) {
   setReportStatus(`${label}：${pdfCount} 个 PDF 已就绪${skippedText}`);
 }
 
+function setPendingTransactionFiles(items, label) {
+  const files = items.filter((item) => item && item.file && item.file.name);
+  state.pendingTransactionFiles = files;
+  const processableCount = files.filter((item) => isTransactionSourceFile(item.file)).length;
+  const skippedCount = files.length - processableCount;
+  const folderCount = countTopLevelFolders(files);
+
+  if (!files.length) {
+    els.transactionUploadSelectionText.textContent = "没有读取到文件，请重新拖放或选择";
+    addTransactionLog("没有读取到文件", "warning");
+    setTransactionStatus("没有读取到文件");
+    return;
+  }
+
+  const folderText = folderCount ? `，包含 ${folderCount} 个顶层文件夹` : "";
+  const skippedText = skippedCount ? `，${skippedCount} 个非 CSV/XLSX 会被跳过` : "";
+  els.transactionUploadSelectionText.textContent = `${label}：${files.length} 个文件，${processableCount} 个可处理${folderText}${skippedText}`;
+  addTransactionLog(`${label}：${files.length} 个文件，${processableCount} 个可处理${skippedText}`, skippedCount ? "warning" : "info");
+  logSkippedUnsupportedFiles(files, addTransactionLog, isTransactionSourceFile, "非 CSV/XLSX");
+  setTransactionStatus(`${processableCount} 个交易明细文件已就绪${skippedText}`);
+}
+
+function setPendingWalmartTransactionFiles(items, label) {
+  const files = items.filter((item) => item && item.file && item.file.name);
+  state.pendingWalmartTransactionFiles = files;
+  const processableCount = files.filter((item) => isWalmartTransactionSourceFile(item.file)).length;
+  const skippedCount = files.length - processableCount;
+  const folderCount = countTopLevelFolders(files);
+
+  if (!files.length) {
+    els.walmartTransactionUploadSelectionText.textContent = "没有读取到文件，请重新拖放或选择";
+    addWalmartTransactionLog("没有读取到文件", "warning");
+    setWalmartTransactionStatus("没有读取到文件");
+    return;
+  }
+
+  const folderText = folderCount ? `，包含 ${folderCount} 个顶层文件夹` : "";
+  const skippedText = skippedCount ? `，${skippedCount} 个非 XLSX/XLSM 会被跳过` : "";
+  els.walmartTransactionUploadSelectionText.textContent = `${label}：${files.length} 个文件，${processableCount} 个可处理${folderText}${skippedText}`;
+  addWalmartTransactionLog(`${label}：${files.length} 个文件，${processableCount} 个可处理${skippedText}`, skippedCount ? "warning" : "info");
+  logSkippedUnsupportedFiles(files, addWalmartTransactionLog, isWalmartTransactionSourceFile, "非 XLSX/XLSM");
+  setWalmartTransactionStatus(`${processableCount} 个沃尔玛财务报表已就绪${skippedText}`);
+}
+
 function setPendingPortFeeFiles(items, label) {
   const files = items.filter((item) => item && item.file && item.file.name);
   state.pendingPortFeeFiles = files;
@@ -1568,8 +1842,25 @@ function isPdfFile(file) {
   return file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
 }
 
+function isTransactionSourceFile(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls");
+}
+
+function isWalmartTransactionSourceFile(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".xlsx") || name.endsWith(".xlsm");
+}
+
 function getUploadItemPath(item) {
   return item.relativePath || item.file.webkitRelativePath || item.file.name;
+}
+
+function countTopLevelFolders(items) {
+  return uniqueSorted(items
+    .map((item) => getUploadItemPath(item))
+    .filter((path) => path.includes("/"))
+    .map((path) => path.split("/")[0])).length;
 }
 
 function logSkippedNonPdfFiles(items, logFn, limit = 20) {
@@ -1584,9 +1875,21 @@ function logSkippedNonPdfFiles(items, logFn, limit = 20) {
   }
 }
 
+function logSkippedUnsupportedFiles(items, logFn, predicate, label, limit = 20) {
+  const skippedItems = items.filter((item) => item && item.file && !predicate(item.file));
+  if (!skippedItems.length) return;
+  logFn(`将跳过 ${skippedItems.length} 个${label}文件，具体位置如下`, "warning");
+  skippedItems.slice(0, limit).forEach((item) => {
+    logFn(`${label}：${getUploadItemPath(item)}`, "warning");
+  });
+  if (skippedItems.length > limit) {
+    logFn(`还有 ${skippedItems.length - limit} 个${label}文件未在日志中展开`, "warning");
+  }
+}
+
 function logSkippedServerPaths(paths, logFn, limit = 20) {
   if (!paths || !paths.length) return;
-  logFn(`服务器实际跳过 ${paths.length} 个非 PDF 或无效文件`, "warning");
+  logFn(`服务器实际跳过 ${paths.length} 个不支持或无效文件`, "warning");
   paths.slice(0, limit).forEach((path) => {
     logFn(`已跳过：${path}`, "warning");
   });
@@ -3506,10 +3809,17 @@ function setTransactionIdle() {
 
 function updateTransactionBusyControls() {
   els.transactionSubmitButton.disabled = state.transactionBusy;
+  els.transactionUploadSubmitButton.disabled = state.transactionBusy;
+  els.transactionUploadPickers.forEach((button) => {
+    button.disabled = state.transactionBusy;
+  });
+  els.transactionDropTarget.classList.toggle("disabled", state.transactionBusy);
   setSoftDisabled(els.newTransactionTask, state.transactionBusy);
   setSoftDisabled(els.cancelTransactionTask, !state.transactionBusy || !state.transactionAbortController);
   setSoftDisabled(els.retryTransactionTask, state.transactionBusy || !state.lastTransactionTask);
   setSoftDisabled(els.clearTransactionResult, state.transactionBusy || !state.transactionRows.length);
+  els.transactionSubmitButton.textContent = state.transactionBusy ? "处理中..." : "清洗并生成 Excel";
+  els.transactionUploadSubmitButton.textContent = state.transactionBusy ? "处理中..." : "上传并清洗";
   els.cancelTransactionTask.textContent = state.transactionBusy && state.transactionAbortController ? "终止当前任务" : "终止当前任务";
 }
 
@@ -3585,6 +3895,10 @@ function clearTransactionResults({ resetInput = false } = {}) {
   disableTransactionDownloads();
   if (resetInput) {
     state.lastTransactionTask = null;
+    state.pendingTransactionFiles = [];
+    els.transactionFileInput.value = "";
+    els.transactionFolderUploadInput.value = "";
+    els.transactionUploadSelectionText.textContent = "支持 .csv / .xlsx 文件，也支持品牌 / 国家多层文件夹";
   }
   resetTransactionLogs(resetInput ? "已新建交易明细任务，等待导入" : "已清空当前交易明细结果");
   setTransactionStatus("等待导入");
@@ -3609,11 +3923,17 @@ function setWalmartTransactionIdle() {
 
 function updateWalmartTransactionBusyControls() {
   els.walmartTransactionSubmitButton.disabled = state.walmartTransactionBusy;
+  els.walmartTransactionUploadSubmitButton.disabled = state.walmartTransactionBusy;
+  els.walmartTransactionUploadPickers.forEach((button) => {
+    button.disabled = state.walmartTransactionBusy;
+  });
+  els.walmartTransactionDropTarget.classList.toggle("disabled", state.walmartTransactionBusy);
   setSoftDisabled(els.newWalmartTransactionTask, state.walmartTransactionBusy);
   setSoftDisabled(els.cancelWalmartTransactionTask, !state.walmartTransactionBusy || !state.walmartTransactionAbortController);
   setSoftDisabled(els.retryWalmartTransactionTask, state.walmartTransactionBusy || !state.lastWalmartTransactionTask);
   setSoftDisabled(els.clearWalmartTransactionResult, state.walmartTransactionBusy || !state.walmartTransactionRows.length);
   els.walmartTransactionSubmitButton.textContent = state.walmartTransactionBusy ? "处理中..." : "清洗并生成 Excel";
+  els.walmartTransactionUploadSubmitButton.textContent = state.walmartTransactionBusy ? "处理中..." : "上传并清洗";
 }
 
 function retryWalmartTransactionTask() {
@@ -3684,6 +4004,10 @@ function clearWalmartTransactionResults({ resetInput = false } = {}) {
   disableWalmartTransactionDownloads();
   if (resetInput) {
     state.lastWalmartTransactionTask = null;
+    state.pendingWalmartTransactionFiles = [];
+    els.walmartTransactionFileInput.value = "";
+    els.walmartTransactionFolderUploadInput.value = "";
+    els.walmartTransactionUploadSelectionText.textContent = "支持 .xlsx / .xlsm 文件，也支持多层文件夹";
   }
   resetWalmartTransactionLogs(resetInput ? "已新建沃尔玛交易数据任务，等待导入" : "已清空当前沃尔玛结果");
   setWalmartTransactionStatus("等待导入");

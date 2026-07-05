@@ -148,8 +148,12 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_report_upload()
         elif parsed.path == "/api/transaction-csv/process-folder":
             self._handle_transaction_process_folder()
+        elif parsed.path == "/api/transaction-csv/upload":
+            self._handle_transaction_upload()
         elif parsed.path == "/api/walmart-transaction/process-folder":
             self._handle_walmart_transaction_process_folder()
+        elif parsed.path == "/api/walmart-transaction/upload":
+            self._handle_walmart_transaction_upload()
         elif parsed.path == "/api/port-fee-pdf/process-folder":
             self._handle_port_fee_process_folder()
         elif parsed.path == "/api/port-fee-pdf/upload":
@@ -805,6 +809,62 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         )
         self._send_json(_transaction_job_payload(job))
 
+    def _handle_transaction_upload(self) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        job_id = _new_batch_id()
+        upload_dir = UPLOAD_ROOT / f"{job_id}-transaction-csv"
+        saved = self._save_table_upload(
+            upload_dir,
+            allowed_suffixes={".csv", ".xlsx", ".xls"},
+            empty_error="没有收到 CSV/XLSX 交易明细文件",
+        )
+        if "error" in saved:
+            self._send_json(saved, status=saved.get("status", 400))
+            return
+
+        output_dir = OUTPUT_ROOT / f"{job_id}-transaction-csv"
+        job = process_transaction_folder(upload_dir, output_dir, job_id, label=f"上传批次 {job_id}")
+        TRANSACTION_JOBS[job.job_id] = job
+        job.summary.update({
+            "received": saved["received"],
+            "saved": saved["saved"],
+            "skipped": saved["skipped"],
+            "skipped_paths": saved["skipped_paths"],
+            "renamed": saved["renamed"],
+        })
+        status = "需复核" if (
+            job.summary.get("date_parse_failures")
+            or job.summary.get("amount_failures")
+            or job.summary.get("unresolved_country_files")
+            or job.summary.get("unsupported_files")
+            or job.summary.get("skipped")
+        ) else "完成"
+        _record_history(
+            task_id=job.job_id,
+            task_type="transaction_csv",
+            title="交易明细 CSV",
+            source_label=job.source_label,
+            summary=job.summary,
+            status=status,
+            downloads=[
+                {"label": "交易总表", "url": f"/api/transaction-csv/download?job_id={job.job_id}&file=total"},
+                {"label": "审计报告", "url": f"/api/transaction-csv/download?job_id={job.job_id}&file=audit"},
+            ],
+            owner=user,
+        )
+        record_operation(
+            DATABASE_PATH,
+            operation="transaction_csv_upload",
+            owner=user,
+            target_id=job.job_id,
+            target_type="transaction_csv",
+            message=f"上传并处理交易明细：{job_id}",
+            payload=job.summary,
+        )
+        self._send_json(_transaction_job_payload(job))
+
     def _handle_walmart_transaction_process_folder(self) -> None:
         user = self._require_auth()
         if not user:
@@ -848,6 +908,56 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             target_id=job.job_id,
             target_type="walmart_transaction",
             message=f"处理沃尔玛财务报表文件夹：{folder}",
+            payload=job.summary,
+        )
+        self._send_json(_walmart_transaction_job_payload(job))
+
+    def _handle_walmart_transaction_upload(self) -> None:
+        user = self._require_auth()
+        if not user:
+            return
+        job_id = _new_batch_id()
+        upload_dir = UPLOAD_ROOT / f"{job_id}-walmart-transaction"
+        saved = self._save_table_upload(
+            upload_dir,
+            allowed_suffixes={".xlsx", ".xlsm"},
+            empty_error="没有收到 XLSX/XLSM 沃尔玛财务报表",
+        )
+        if "error" in saved:
+            self._send_json(saved, status=saved.get("status", 400))
+            return
+
+        output_dir = OUTPUT_ROOT / f"{job_id}-walmart-transaction"
+        job = process_walmart_transaction_folder(upload_dir, output_dir, job_id, label=f"上传批次 {job_id}")
+        WALMART_TRANSACTION_JOBS[job.job_id] = job
+        job.summary.update({
+            "received": saved["received"],
+            "saved": saved["saved"],
+            "skipped": saved["skipped"],
+            "skipped_paths": saved["skipped_paths"],
+            "renamed": saved["renamed"],
+        })
+        status = "需复核" if job.summary.get("warnings") or job.summary.get("unmapped_values") or job.summary.get("skipped") else "完成"
+        _record_history(
+            task_id=job.job_id,
+            task_type="walmart_transaction",
+            title="沃尔玛交易数据",
+            source_label=job.source_label,
+            summary=job.summary,
+            status=status,
+            downloads=[
+                {"label": "经营数据总表", "url": f"/api/walmart-transaction/download?job_id={job.job_id}&file=total"},
+                {"label": "清洗审计", "url": f"/api/walmart-transaction/download?job_id={job.job_id}&file=audit"},
+            ],
+            owner=user,
+        )
+        record_operation(
+            DATABASE_PATH,
+            operation="walmart_transaction_upload",
+            owner=user,
+            target_id=job.job_id,
+            target_type="walmart_transaction",
+            message=f"上传并处理沃尔玛财务报表：{job_id}",
             payload=job.summary,
         )
         self._send_json(_walmart_transaction_job_payload(job))
@@ -984,6 +1094,68 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             payload=job.summary,
         )
         self._send_json(_port_fee_job_payload(job))
+
+    def _save_table_upload(self, upload_dir: Path, allowed_suffixes: set[str], empty_error: str) -> dict:
+        content_length = int(self.headers.get("Content-Length", "0") or "0")
+        if content_length > CONFIG.max_upload_bytes:
+            return {
+                "error": f"上传内容超过限制：当前上限 {CONFIG.max_upload_mb} MB",
+                "status": 413,
+            }
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            return {"error": "请上传 multipart/form-data 文件", "status": 400}
+
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+            },
+        )
+
+        received = saved = skipped = renamed = 0
+        skipped_paths: list[str] = []
+        files = form["files"] if "files" in form else []
+        if not isinstance(files, list):
+            files = [files]
+        for item in files:
+            received += 1
+            raw_filename = getattr(item, "filename", "")
+            upload_path = _safe_upload_relative_path(raw_filename)
+            if upload_path is None or upload_path.suffix.lower() not in allowed_suffixes:
+                skipped += 1
+                skipped_paths.append(_upload_display_path(raw_filename))
+                continue
+            target = _unique_upload_target(upload_dir / upload_path)
+            if target.name != upload_path.name or target.parent != upload_dir / upload_path.parent:
+                renamed += 1
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("wb") as handle:
+                shutil.copyfileobj(item.file, handle)
+            saved += 1
+
+        if saved == 0:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            return {
+                "error": empty_error,
+                "received": received,
+                "saved": saved,
+                "skipped": skipped,
+                "skipped_paths": skipped_paths,
+                "status": 400,
+            }
+
+        return {
+            "received": received,
+            "saved": saved,
+            "skipped": skipped,
+            "skipped_paths": skipped_paths,
+            "renamed": renamed,
+        }
 
     def _handle_upload(self) -> None:
         user = self._require_auth()
@@ -1955,9 +2127,15 @@ def _remove_task_artifacts(task: dict) -> int:
             UPLOAD_ROOT / f"{task_id}-report-pdf",
         ])
     elif task_type == "transaction_csv":
-        candidates.append(OUTPUT_ROOT / f"{task_id}-transaction-csv")
+        candidates.extend([
+            OUTPUT_ROOT / f"{task_id}-transaction-csv",
+            UPLOAD_ROOT / f"{task_id}-transaction-csv",
+        ])
     elif task_type == "walmart_transaction":
-        candidates.append(OUTPUT_ROOT / f"{task_id}-walmart-transaction")
+        candidates.extend([
+            OUTPUT_ROOT / f"{task_id}-walmart-transaction",
+            UPLOAD_ROOT / f"{task_id}-walmart-transaction",
+        ])
     elif task_type == "port_fee_pdf":
         candidates.extend([
             OUTPUT_ROOT / f"{task_id}-port-fee-pdf",

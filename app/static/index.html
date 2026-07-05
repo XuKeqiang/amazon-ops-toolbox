@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Amazon Operations Toolbox</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260705-walmart-transaction" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260705-table-upload" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen hidden" aria-label="登录">
@@ -357,7 +357,20 @@
             </div>
           </header>
 
-          <section class="input-band single" aria-label="交易明细导入">
+          <section class="input-band" aria-label="交易明细导入">
+            <form id="transactionUploadForm" class="dropzone">
+              <input id="transactionFileInput" class="visually-hidden" name="transactionFiles" type="file" multiple accept=".csv,.xlsx,.xls" />
+              <input id="transactionFolderUploadInput" class="visually-hidden" name="transactionFolderFiles" type="file" multiple webkitdirectory directory />
+              <div id="transactionDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择交易明细文件">
+                <strong>拖放交易明细文件或文件夹</strong>
+                <span id="transactionUploadSelectionText">支持 .csv / .xlsx 文件，也支持品牌 / 国家多层文件夹</span>
+              </div>
+              <div class="dropzone-actions">
+                <button class="button secondary compact" type="button" data-transaction-upload-picker="files">选择文件</button>
+                <button class="button secondary compact" type="button" data-transaction-upload-picker="folder">选择文件夹</button>
+                <button class="button accent compact" type="submit">上传并清洗</button>
+              </div>
+            </form>
             <form id="transactionFolderForm" class="folder-form wide">
               <label for="transactionFolderInput">服务器文件夹路径</label>
               <div class="inline-control">
@@ -379,7 +392,7 @@
               <span>读取、清洗、合并、导出进度</span>
             </div>
             <ol id="transactionLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待输入服务器文件夹路径。</li>
+              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
             </ol>
           </section>
 
@@ -598,7 +611,20 @@
             </div>
           </header>
 
-          <section class="input-band single" aria-label="沃尔玛交易数据导入">
+          <section class="input-band" aria-label="沃尔玛交易数据导入">
+            <form id="walmartTransactionUploadForm" class="dropzone">
+              <input id="walmartTransactionFileInput" class="visually-hidden" name="walmartTransactionFiles" type="file" multiple accept=".xlsx,.xlsm" />
+              <input id="walmartTransactionFolderUploadInput" class="visually-hidden" name="walmartTransactionFolderFiles" type="file" multiple webkitdirectory directory />
+              <div id="walmartTransactionDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择沃尔玛财务报表">
+                <strong>拖放沃尔玛财务报表或文件夹</strong>
+                <span id="walmartTransactionUploadSelectionText">支持 .xlsx / .xlsm 文件，也支持多层文件夹</span>
+              </div>
+              <div class="dropzone-actions">
+                <button class="button secondary compact" type="button" data-walmart-transaction-upload-picker="files">选择文件</button>
+                <button class="button secondary compact" type="button" data-walmart-transaction-upload-picker="folder">选择文件夹</button>
+                <button class="button accent compact" type="submit">上传并清洗</button>
+              </div>
+            </form>
             <form id="walmartTransactionFolderForm" class="folder-form wide">
               <label for="walmartTransactionFolderInput">服务器文件夹路径</label>
               <div class="inline-control">
@@ -620,7 +646,7 @@
               <span>读取、字段校准、合并、导出进度</span>
             </div>
             <ol id="walmartTransactionLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待输入服务器文件夹路径。</li>
+              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
             </ol>
           </section>
 
@@ -930,6 +956,6 @@
       </aside>
     </div>
 
-    <script src="/static/app.js?v=20260705-walmart-transaction"></script>
+    <script src="/static/app.js?v=20260705-table-upload"></script>
   </body>
 </html>
