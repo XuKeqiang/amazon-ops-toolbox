@@ -121,6 +121,8 @@ Copy-Item config\app-config.example.json config\app-config.json
 
 `paths.allowed_input_roots` 默认只包含项目内的 `data/input`。如果运营文件放在服务器上的其他目录，一定要改成你自己电脑或公司服务器的真实路径。系统只会扫描这个白名单里的目录，避免误读其他文件。
 
+注意：`config/app-config.json` 是每台部署机器自己的本机配置，不会提交到 GitHub，也不会被 `git pull` 自动更新。换电脑部署时不要照搬开发者电脑路径，要改成那台服务器真实存在的目录。
+
 macOS 路径示例：
 
 ```json
@@ -272,6 +274,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup.ps1
 8. 识别结果表格支持搜索、筛选、排序和导出。
 9. 历史任务会保存到 SQLite，服务重启后仍可查看并重新下载交付物。
 
+汇总报告 PDF 的店铺名以文件名或文件夹中推断出的店铺名为主。PDF 正文里的 `Display name` 只用于核验：如果文件名店铺名和 PDF 店铺名首字母不一致，系统会在预检日志和确认弹窗里提醒，用户确认后才继续生成 Excel。
+
 ## 日常更新代码
 
 当 GitHub 仓库有新版本时，在服务器电脑执行：
@@ -296,6 +300,36 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\update.ps1
 - 更新 Python 依赖
 - 停止旧服务
 - 启动新服务
+
+更新完成后，建议做 3 个检查：
+
+1. 刷新浏览器页面，确认可以正常登录。
+2. 打开“汇总报告 PDF”或其他常用模块，确认页面没有旧缓存导致的异常。
+3. 如果这次更新涉及 `config/app-config.example.json` 或 README 中的配置项，手动检查自己的 `config/app-config.json` 是否需要补充新配置。
+
+`git pull` 不会覆盖 `config/app-config.json`、数据库、上传文件和导出文件。它们属于部署机器本地数据，会继续保留。
+
+如果只想手动更新，也可以按下面顺序执行：
+
+macOS：
+
+```bash
+cd ~/Documents/amazon-ops-toolbox
+git pull --ff-only
+bash scripts/setup-cn.sh
+bash scripts/stop.sh
+bash scripts/start.sh
+```
+
+Windows PowerShell：
+
+```powershell
+cd $HOME\Documents\amazon-ops-toolbox
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
+```
 
 ## 常见问题
 
@@ -394,6 +428,32 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
+### 更新后配置没有变化
+
+这是正常现象。`config/app-config.json` 是本机私有配置，不跟随 GitHub 更新。如果 README 或 `config/app-config.example.json` 增加了新配置项，需要手动把需要的配置复制到自己的 `config/app-config.json`，再重启服务。
+
+不要把开发者电脑里的路径原样复制到部署机器，例如 `/Users/xukeqiang/...` 只适用于开发者本机。部署机器应该写自己的路径，例如：
+
+```json
+"allowed_input_roots": [
+  "/Users/Shared/EcommerceData"
+]
+```
+
+Windows 示例：
+
+```json
+"allowed_input_roots": [
+  "D:/Operations/Amazon"
+]
+```
+
+### 汇总报告 PDF 店铺名提醒是什么意思
+
+汇总报告 PDF 会优先使用文件名或文件夹里的店铺名，方便按团队交付口径汇总。PDF 正文里的 `Display name` 更适合做核验来源。
+
+如果文件名里是 `VINAEMO`，但 PDF 里识别到 `Keebofly`，首字母 `V` 和 `K` 不一致，系统会在继续处理前提醒。这通常表示文件放错目录、文件名处理错误，或 PDF 本身属于另一个店铺。确认无误可以继续；不确定时建议取消任务，先整理原始文件。
+
 ## 当前能力
 
 - 批量读取亚马逊货件 PDF。
@@ -403,6 +463,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 - 生成规范文件名预览，并在表格中标记具体告警项。
 - 人工确认后按工厂生成 zip，并在每个工厂压缩包内继续按国家分文件夹。
 - 支持汇总报告 PDF 批量提取并导出 Excel。
+- 汇总报告 PDF 使用文件名/目录店铺名作为主店铺，并用 PDF Display name 做首字母核验提醒。
 - 支持亚马逊交易明细 CSV/XLSX 批量上传、拖放、清洗、汇总和审计导出。
 - 支持港杂费发票 PDF 批量提取，生成“发票汇总”和“费用明细”Excel 工作簿。
 - 支持沃尔玛交易数据 Excel 批量上传、拖放、清洗合并，生成经营数据总表和清洗审计。
