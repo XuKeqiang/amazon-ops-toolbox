@@ -5,7 +5,6 @@
   --brand-green: #00f58a;
   --brand-green-deep: #00cf72;
   --brand-green-soft: #e8fff3;
-  --brand-tag: #3772cf;
   --brand-warn: #c37d0d;
   --brand-error: #d45656;
   --canvas: #ffffff;
@@ -17,11 +16,12 @@
   --ink: #0a0a0a;
   --charcoal: #1c1c1e;
   --steel: #5a5a5c;
-  --stone: #888888;
-  --muted: #a8a8aa;
+  --stone: #6f6f72;
+  --muted: #767676;
   --shadow-1: rgba(0, 0, 0, 0.04) 0 1px 2px;
   --shadow-2: rgba(0, 0, 0, 0.08) 0 4px 12px;
-  --mono: "Geist Mono", "SF Mono", Menlo, Consolas, monospace;
+  --transition-fast: 150ms ease;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -49,26 +49,48 @@ select {
 
 .login-screen {
   display: grid;
+  position: relative;
   min-height: 100vh;
   place-items: center;
   padding: 24px;
-  background: var(--canvas);
+  background:
+    radial-gradient(120% 100% at 50% -10%, color-mix(in srgb, var(--brand-green) 10%, transparent), transparent 60%),
+    var(--canvas);
 }
 
 .login-panel {
   display: grid;
   width: min(420px, 100%);
   gap: 14px;
-  padding: 32px;
+  padding: 32px 32px 24px;
   border: 1px solid var(--hairline);
-  border-radius: 12px;
-  background: var(--canvas);
+  border-top: 3px solid var(--brand-green);
+  border-radius: 14px;
+  background: var(--surface);
   box-shadow: var(--shadow-2);
+}
+
+.login-panel .brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 20px;
 }
 
 .login-panel h1 {
   margin-bottom: 8px;
-  font-size: 34px;
+  font-size: 30px;
+  line-height: 1.25;
+}
+
+.login-note {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline-soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .login-panel label {
@@ -166,14 +188,6 @@ select {
   background: var(--canvas);
 }
 
-.section-label {
-  color: var(--steel);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-  letter-spacing: 0;
-}
-
 .nav {
   display: grid;
   gap: 18px;
@@ -190,7 +204,6 @@ select {
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0;
 }
 
 .mobile-workflow-nav {
@@ -215,6 +228,11 @@ select {
   color: var(--ink);
   background: var(--surface);
   font-weight: 500;
+}
+
+.nav-item:hover:not(.active):not(:disabled) {
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .nav-item.active::before {
@@ -295,7 +313,6 @@ select {
   font-size: 11px;
   font-weight: 600;
   line-height: 1.4;
-  letter-spacing: 0;
 }
 
 h1,
@@ -333,7 +350,7 @@ h2 {
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
 }
 
 .button.primary {
@@ -353,6 +370,10 @@ h2 {
 
 .button.accent:hover {
   background: var(--brand-green-deep);
+}
+
+.button:active {
+  transform: translateY(1px);
 }
 
 .button.secondary {
@@ -640,7 +661,6 @@ h2 {
   color: var(--steel);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0;
   line-height: 1.2;
 }
 
@@ -1580,6 +1600,7 @@ tr.active-row td {
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
+  text-decoration-line: underline;
   text-decoration-color: var(--brand-green-deep);
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
@@ -1851,10 +1872,6 @@ tr.active-row td {
   .summary-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-
-  h1 {
-    font-size: 44px;
-  }
 }
 
 @media (max-width: 640px) {
@@ -1935,4 +1952,225 @@ tr.active-row td {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ============================================================
+   Design-system hardening
+   - Dark theme tokens (auto via prefers-color-scheme + manual)
+   - Theme-aware focus rings
+   - Collapsible disclosure (task-brief / task-controls)
+   ============================================================ */
+
+/* ---------- Dark theme tokens ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #0c0f0d;
+    --surface: #151917;
+    --surface-soft: #1b201d;
+    --surface-code: #000000;
+    --hairline: #2a2f2b;
+    --hairline-soft: #232823;
+    --ink: #eef1ee;
+    --charcoal: #c7ccc8;
+    --steel: #a6aba6;
+    --stone: #8c918c;
+    --muted: #828782;
+    --brand-green-soft: rgba(0, 245, 138, 0.14);
+    --primary: #eef1ee;
+    --on-primary: #0c0f0d;
+    --shadow-1: rgba(0, 0, 0, 0.45) 0 1px 2px;
+    --shadow-2: rgba(0, 0, 0, 0.6) 0 4px 12px;
+  }
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0c0f0d;
+  --surface: #151917;
+  --surface-soft: #1b201d;
+  --surface-code: #000000;
+  --hairline: #2a2f2b;
+  --hairline-soft: #232823;
+  --ink: #eef1ee;
+  --charcoal: #c7ccc8;
+  --steel: #a6aba6;
+  --stone: #8c918c;
+  --muted: #828782;
+  --brand-green-soft: rgba(0, 245, 138, 0.14);
+  --primary: #eef1ee;
+  --on-primary: #0c0f0d;
+  --shadow-1: rgba(0, 0, 0, 0.45) 0 1px 2px;
+  --shadow-2: rgba(0, 0, 0, 0.6) 0 4px 12px;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* ---------- Theme toggle (manual light/dark switch) ---------- */
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 9999px;
+  color: var(--charcoal);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--transition-fast, 150ms ease),
+    border-color var(--transition-fast, 150ms ease),
+    background-color var(--transition-fast, 150ms ease);
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  border-color: var(--brand-green);
+  background: var(--brand-green-soft);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.theme-toggle .icon-sun {
+  display: none;
+}
+
+.theme-toggle .icon-moon {
+  display: block;
+}
+
+[data-theme="dark"] .theme-toggle .icon-sun {
+  display: block;
+}
+
+[data-theme="dark"] .theme-toggle .icon-moon {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .icon-sun {
+    display: block;
+  }
+  :root:not([data-theme="light"]) .theme-toggle .icon-moon {
+    display: none;
+  }
+}
+
+/* Floating position for the login-screen toggle */
+.theme-toggle--floating {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+}
+
+/* ---------- Theme-aware surfaces (replace hard-coded rgba) ---------- */
+.masthead {
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+}
+
+.selection-toolbar {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.modal-backdrop {
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+
+.inspector {
+  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--brand-green) 8%, var(--surface)));
+}
+
+.package-path dd {
+  background: var(--surface-soft);
+}
+
+.package-result {
+  background: linear-gradient(180deg, rgba(0, 255, 144, 0.14), color-mix(in srgb, var(--canvas) 94%, var(--brand-green)));
+}
+
+.package-download {
+  background: var(--charcoal);
+  color: var(--canvas);
+}
+
+.package-download span {
+  color: color-mix(in srgb, var(--canvas) 75%, var(--charcoal));
+}
+
+/* ---------- Focus rings (keyboard accessibility) ---------- */
+.button:focus-visible,
+.small-button:focus-visible,
+.nav-item:focus-visible,
+.sort-button:focus-visible,
+.filter-control input:focus-visible,
+.filter-control select:focus-visible,
+.text-link:focus-visible,
+.column-menu-action:focus-visible,
+.column-value:focus-visible {
+  outline: 2px solid var(--brand-green);
+  outline-offset: 2px;
+}
+
+/* ---------- Disclosure: task-brief & task-controls ---------- */
+.task-brief > summary,
+.task-controls > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.task-brief > summary::-webkit-details-marker,
+.task-controls > summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-brief > summary {
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
+  color: var(--steel);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.task-brief > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.16s ease;
+}
+
+.task-brief:not([open]) > summary::after {
+  transform: translateY(0) rotate(-45deg);
+}
+
+.task-controls {
+  margin-bottom: 24px;
+}
+
+.task-controls > summary {
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 9999px;
+  color: var(--steel);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.task-controls[open] > summary {
+  flex-basis: 100%;
+  margin-bottom: 10px;
 }

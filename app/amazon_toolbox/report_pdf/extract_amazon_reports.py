@@ -4,6 +4,7 @@
 import argparse
 import os, re
 import sys
+import unicodedata
 from pathlib import Path
 try:
     import pdfplumber
@@ -1034,6 +1035,15 @@ MONTH_ABBR_TO_NUM = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
                      "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
 
 
+def _first_brand_initial(value: str) -> str:
+    """取品牌/店铺名首个字母(数字或字母)，统一大写，用于不区分大小写的首字母比对。"""
+    normalized = unicodedata.normalize("NFKC", value or "").strip()
+    for char in normalized:
+        if char.isalnum():
+            return char.upper()
+    return ""
+
+
 def extract_pdf(pdf_path, store, country, country_code=None):
     meta = {"store":store,"country":country,"country_code":country_code or country,
             "source_file":os.path.basename(pdf_path),"source_path":str(pdf_path),
@@ -1142,11 +1152,19 @@ def extract_pdf(pdf_path, store, country, country_code=None):
     names = extract_names_from_positioned_words(all_words)
     meta["display_name"] = names["display_name"]
     meta["legal_name"] = names["legal_name"]
+    # 品牌(店铺)判定：以文件名/目录为准，仅做首字母(不区分大小写)比对。
+    # 首字母一致 → 不告警；首字母不一致 → 生成精准告警，但绝不把结果中的
+    # store(品牌)列改成 PDF 解析到的 display_name。
     if meta["display_name"]:
-        if store and store.lower() != meta["display_name"].lower():
-            meta["store_audit_status"] = f"文件名/目录店铺 {store} 与 PDF Display name {meta['display_name']} 不一致，已采用文件名/目录"
+        filename_initial = _first_brand_initial(store)
+        pdf_initial = _first_brand_initial(meta["display_name"])
+        if filename_initial and pdf_initial and filename_initial != pdf_initial:
+            meta["store_audit_status"] = (
+                f"品牌首字母不一致：文件名/目录店铺 {store} 首字母 {filename_initial}，"
+                f"PDF Display name {meta['display_name']} 首字母 {pdf_initial}，已采用文件名/目录"
+            )
         else:
-            meta["store_audit_status"] = "✓ 文件名/目录店铺与 PDF Display name 一致"
+            meta["store_audit_status"] = "✓ 文件名/目录店铺与 PDF Display name 首字母一致"
     else:
         meta["store_audit_status"] = "未从 PDF 正文解析到 Display name，已采用文件名/目录"
 
@@ -1293,15 +1311,38 @@ def _infer_country_from_path(parts):
 
 
 def _infer_store_from_path(parts, country_name, fallback):
+    """从目录路径推断品牌(店铺)名。优先从最内层向外查找，跳过国家和日期类文件夹，
+    以确保品牌名（通常是最靠近 PDF 的非国家文件夹）被正确选中。"""
     if not parts:
         return fallback
+    # 日期/期间类目录名的特征模式，用于排除
+    _date_patterns = re.compile(
+        r"\d{4}[\-年]\d{1,2}"          # 2026-1、2026年3
+        r"|Q[1-4](?:[-–]Q[1-4])?"      # Q1、Q1-Q4
+        r"|按(?:月|季度)"                # 按月、按季度
+        r"|下载|汇总|报告|报表|账期|期间"
+        r"|\d{4}(?:年)?(?:第[一二三四]?季)?",
+        re.IGNORECASE,
+    )
+    # 从最内层向外遍历：品牌通常在最靠近 PDF 的那层目录
+    for part in reversed(parts):
+        # 跳过国家名
+        if part == country_name or part in COUNTRY_NAME_TO_CODE:
+            continue
+        if any(name in part for name in COUNTRY_NAME_TO_CODE):
+            continue
+        # 跳过明显的日期/期间文件夹（如 "2026年1-3月及6月（按月下载）"）
+        if _date_patterns.search(part):
+            continue
+        return part
+    # 兜底：如果全部被跳过了，返回最外层的非国家部分
     for part in parts:
         if part == country_name or part in COUNTRY_NAME_TO_CODE:
             continue
         if any(name in part for name in COUNTRY_NAME_TO_CODE):
             continue
         return part
-    return parts[0] if parts else fallback
+    return fallback
 
 HEADERS = ["店铺","国家/站点","站点代码","货币","报告期","年份","月份","季度",
            "大类","原始字段","英文字段","中文标准字段",

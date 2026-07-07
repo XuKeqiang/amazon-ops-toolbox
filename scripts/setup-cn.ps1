@@ -26,8 +26,8 @@ import sys
 version = sys.version_info
 if version < (3, 11):
     raise SystemExit("Python 版本过低，请安装 Python 3.11 或 3.12。当前版本：%s" % sys.version.split()[0])
-if version >= (3, 14):
-    raise SystemExit("Python 版本过新，建议使用 Python 3.11 或 3.12。当前版本：%s" % sys.version.split()[0])
+if version >= (3, 13):
+    raise SystemExit("Python 版本过新，建议使用 Python 3.11 或 3.12（3.13 已移除 cgi 模块，本项目依赖会报错）。当前版本：%s" % sys.version.split()[0])
 print("Python", sys.version.split()[0])
 '@
 

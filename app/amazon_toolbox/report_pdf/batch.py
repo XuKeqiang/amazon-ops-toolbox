@@ -28,12 +28,12 @@ def preflight_report_folder(folder: Path) -> dict:
             result = report_parser.extract_pdf(pdf_path, store, country, country_code)
             meta = result["meta"]
             row_issues = []
+            # 首字母不一致仅用于汇总指标统计；行级告警统一由 store_audit_status
+            # (已是首字母、不区分大小写比对) 提供，避免重复告警。
             initial_mismatch = _store_initial_mismatch(
                 meta.get("filename_store") or store,
                 meta.get("display_name") or "",
             )
-            if initial_mismatch:
-                row_issues.append(initial_mismatch)
             for key in ("store_audit_status", "country_audit_status", "filename_audit_status"):
                 value = meta.get(key) or ""
                 if value and not value.startswith("✓") and "足够唯一" not in value:
@@ -222,8 +222,8 @@ def _store_initial_mismatch(filename_store: str, pdf_store: str) -> str:
     pdf_initial = _first_brand_initial(pdf_store)
     if filename_initial and pdf_initial and filename_initial != pdf_initial:
         return (
-            f"店铺首字母不一致：文件名/目录店铺 {filename_store} 首字母 {filename_initial}，"
-            f"PDF Display name {pdf_store} 首字母 {pdf_initial}"
+            f"品牌首字母不一致：文件名/目录店铺 {filename_store} 首字母 {filename_initial}，"
+            f"PDF Display name {pdf_store} 首字母 {pdf_initial}，已采用文件名/目录"
         )
     return ""
 

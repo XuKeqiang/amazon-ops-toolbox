@@ -4,10 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Amazon Operations Toolbox</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260705-table-upload" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260707-design-fix" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("amazon-toolbox-theme");
+          if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <section id="loginScreen" class="login-screen hidden" aria-label="登录">
+      <button id="themeToggleLogin" class="theme-toggle theme-toggle--floating" type="button" aria-label="切换深色 / 浅色主题" title="切换深色 / 浅色">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
       <form id="loginForm" class="login-panel" autocomplete="off">
         <div class="brand-mark">A</div>
         <div>
@@ -20,6 +35,7 @@
         <input id="loginPassword" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="请输入密码" />
         <button class="button accent" type="submit">登录</button>
         <p id="loginStatus" class="status-text">请输入管理员分配的账号和密码</p>
+        <p class="login-note">内部运营工具 · 仅限授权人员使用<br />如无法登录，请联系系统管理员</p>
       </form>
     </section>
 
@@ -32,6 +48,10 @@
         </div>
       </div>
       <div class="masthead-actions">
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色主题" title="切换深色 / 浅色">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
         <div id="userBadge" class="user-badge"></div>
         <button id="logoutButton" class="button secondary" type="button">退出</button>
       </div>
@@ -106,15 +126,16 @@
               <label for="folderInput">服务器文件夹路径</label>
               <div class="inline-control">
                 <input id="folderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/shipments 或 C:/EcommerceData/shipments" />
-                <button class="button primary" type="submit">扫描文件夹</button>
+                <button class="button secondary" type="submit">扫描文件夹</button>
               </div>
             </form>
-            <div class="task-controls" aria-label="货件任务控制">
+            <details class="task-controls" open>
+              <summary>任务控制</summary>
               <button id="newShipmentTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelShipmentTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryShipmentTask" class="button secondary compact" type="button">重试上次任务</button>
               <button id="clearShipmentResult" class="button secondary compact" type="button">清空结果</button>
-            </div>
+            </details>
           </section>
 
           <section id="shipmentLogPanel" class="log-panel" aria-label="批次处理日志">
@@ -241,15 +262,16 @@
               <label for="reportFolderInput">服务器文件夹路径</label>
               <div class="inline-control">
                 <input id="reportFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/reports 或 C:/EcommerceData/reports" />
-                <button class="button accent" type="submit">提取并生成 Excel</button>
+                <button class="button secondary" type="submit">提取并生成 Excel</button>
               </div>
             </form>
-            <div class="task-controls" aria-label="汇总报告任务控制">
+            <details class="task-controls" open>
+              <summary>任务控制</summary>
               <button id="newReportTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelReportTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryReportTask" class="button secondary compact" type="button">重试上次任务</button>
               <button id="clearReportResult" class="button secondary compact" type="button">清空结果</button>
-            </div>
+            </details>
           </section>
 
           <section class="log-panel" aria-label="汇总报告处理日志">
@@ -262,7 +284,8 @@
             </ol>
           </section>
 
-          <section class="task-brief compact" aria-label="汇总报告任务说明">
+          <details class="task-brief compact" aria-label="汇总报告任务说明" open>
+            <summary>任务说明</summary>
             <div class="task-brief-main">
               <p class="section-label">任务说明</p>
               <h2>汇总报告 PDF 提取</h2>
@@ -282,7 +305,7 @@
                 <span>生成带摘要、明细和审计信息的 Excel 文件。</span>
               </div>
             </div>
-          </section>
+          </details>
 
           <section class="report-metrics" aria-label="汇总报告概览">
             <div class="metric compact">
@@ -375,15 +398,16 @@
               <label for="transactionFolderInput">服务器文件夹路径</label>
               <div class="inline-control">
                 <input id="transactionFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/amazon-payments 或 C:/EcommerceData/amazon-payments" />
-                <button class="button accent" type="submit">清洗并生成 Excel</button>
+                <button class="button secondary" type="submit">清洗并生成 Excel</button>
               </div>
             </form>
-            <div class="task-controls" aria-label="交易明细任务控制">
+            <details class="task-controls" open>
+              <summary>任务控制</summary>
               <button id="newTransactionTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelTransactionTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryTransactionTask" class="button secondary compact" type="button">重试上次任务</button>
               <button id="clearTransactionResult" class="button secondary compact" type="button">清空结果</button>
-            </div>
+            </details>
           </section>
 
           <section class="log-panel" aria-label="交易明细处理日志">
@@ -396,7 +420,8 @@
             </ol>
           </section>
 
-          <section class="task-brief" aria-label="交易明细任务说明">
+          <details class="task-brief" aria-label="交易明细任务说明" open>
+            <summary>任务说明</summary>
             <div class="task-brief-main">
               <p class="section-label">任务说明</p>
               <h2>交易明细 CSV 清洗</h2>
@@ -416,7 +441,7 @@
                 <span>生成交易明细总表与审计文件；不支持的格式、空文件、字段缺失会在页面和审计表中标记。</span>
               </div>
             </div>
-          </section>
+          </details>
 
           <section class="report-metrics" aria-label="交易明细概览">
             <div class="metric compact">
@@ -503,15 +528,16 @@
               <label for="portFeeFolderInput">服务器文件夹路径</label>
               <div class="inline-control">
                 <input id="portFeeFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/port-fee 或 C:/EcommerceData/port-fee" />
-                <button class="button primary" type="submit">扫描文件夹</button>
+                <button class="button secondary" type="submit">扫描文件夹</button>
               </div>
             </form>
-            <div class="task-controls" aria-label="港杂费任务控制">
+            <details class="task-controls" open>
+              <summary>任务控制</summary>
               <button id="newPortFeeTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelPortFeeTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryPortFeeTask" class="button secondary compact" type="button">重试上次任务</button>
               <button id="clearPortFeeResult" class="button secondary compact" type="button">清空结果</button>
-            </div>
+            </details>
           </section>
 
           <section class="log-panel" aria-label="港杂费处理日志">
@@ -524,13 +550,14 @@
             </ol>
           </section>
 
-          <section class="task-brief" aria-label="港杂费任务说明">
-            <div>
-              <span class="section-label">任务说明</span>
+            <details class="task-brief" aria-label="港杂费任务说明" open>
+              <summary>任务说明</summary>
+              <div class="task-brief-main">
+                <span class="section-label">任务说明</span>
               <h2>港杂费发票 PDF 提取</h2>
               <p>用于批量处理港杂费付款申请中的 PDF 发票，提取 Invoice No.、日期、Ref No.、FCR、目的港、柜号、费用明细和发票金额，并生成结构化 Excel。</p>
             </div>
-            <div class="brief-grid">
+            <div class="task-brief-list">
               <div>
                 <strong>文件要求</strong>
                 <span>支持可复制文本的 PDF 发票；扫描件或图片型 PDF 会进入需复核队列。</span>
@@ -544,7 +571,7 @@
                 <span>Excel 包含“发票汇总”和“费用明细”两个工作表。</span>
               </div>
             </div>
-          </section>
+          </details>
 
           <section class="report-metrics" aria-label="港杂费概览">
             <div class="metric compact">
@@ -629,15 +656,16 @@
               <label for="walmartTransactionFolderInput">服务器文件夹路径</label>
               <div class="inline-control">
                 <input id="walmartTransactionFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/walmart 或 C:/EcommerceData/walmart" />
-                <button class="button accent" type="submit">清洗并生成 Excel</button>
+                <button class="button secondary" type="submit">清洗并生成 Excel</button>
               </div>
             </form>
-            <div class="task-controls" aria-label="沃尔玛交易数据任务控制">
+            <details class="task-controls" open>
+              <summary>任务控制</summary>
               <button id="newWalmartTransactionTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelWalmartTransactionTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryWalmartTransactionTask" class="button secondary compact" type="button">重试上次任务</button>
               <button id="clearWalmartTransactionResult" class="button secondary compact" type="button">清空结果</button>
-            </div>
+            </details>
           </section>
 
           <section class="log-panel" aria-label="沃尔玛交易数据处理日志">
@@ -650,7 +678,8 @@
             </ol>
           </section>
 
-          <section class="task-brief" aria-label="沃尔玛交易数据任务说明">
+          <details class="task-brief" aria-label="沃尔玛交易数据任务说明" open>
+            <summary>任务说明</summary>
             <div class="task-brief-main">
               <p class="section-label">任务说明</p>
               <h2>Excel 报表数据清洗合并</h2>
@@ -670,7 +699,7 @@
                 <span>生成“沃尔玛经营数据”总表和“清洗审计”工作簿，可在历史任务中重新下载。</span>
               </div>
             </div>
-          </section>
+          </details>
 
           <section class="report-metrics" aria-label="沃尔玛交易数据概览">
             <div class="metric compact">

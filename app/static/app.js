@@ -4154,3 +4154,37 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+/* ---------- Theme toggle (manual light / dark) ---------- */
+(function initThemeToggle() {
+  const root = document.documentElement;
+  const STORAGE_KEY = "amazon-toolbox-theme";
+  const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function toggleTheme() {
+    const current = root.getAttribute("data-theme");
+    const systemDark = systemPrefersDark.matches;
+    let next;
+    if (current === "dark") {
+      next = "light";
+    } else if (current === "light") {
+      next = "dark";
+    } else {
+      next = systemDark ? "light" : "dark";
+    }
+    if (next === "dark") {
+      root.setAttribute("data-theme", "dark");
+    } else {
+      root.setAttribute("data-theme", "light");
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch (e) {
+      /* storage may be unavailable; ignore */
+    }
+  }
+
+  document.querySelectorAll(".theme-toggle").forEach((button) => {
+    button.addEventListener("click", toggleTheme);
+  });
+})();
