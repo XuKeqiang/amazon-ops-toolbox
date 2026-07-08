@@ -24,3 +24,7 @@ config/app-config.json
 *.log
 tmp/
 docs/audits/
+
+# Generated shortcuts (run scripts/create-shortcut.sh or .ps1 to recreate)
+*.app/
+scripts/launch-from-shortcut.ps1
