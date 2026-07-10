@@ -222,7 +222,7 @@ def _store_initial_mismatch(filename_store: str, pdf_store: str) -> str:
     pdf_initial = _first_brand_initial(pdf_store)
     if filename_initial and pdf_initial and filename_initial != pdf_initial:
         return (
-            f"品牌首字母不一致：文件名/目录店铺 {filename_store} 首字母 {filename_initial}，"
+            f"店铺首字母不一致：文件名/目录店铺 {filename_store} 首字母 {filename_initial}，"
             f"PDF Display name {pdf_store} 首字母 {pdf_initial}，已采用文件名/目录"
         )
     return ""

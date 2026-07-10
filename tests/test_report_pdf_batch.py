@@ -53,6 +53,17 @@ class ReportPdfBatchTest(TestCase):
         self.assertEqual(rows[0][2], "美国")
         self.assertEqual(rows[0][3], "US")
 
+    def test_collect_pdfs_reads_store_from_monthly_filename(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "202601-Bikoney-加拿大-汇总报告.pdf").write_bytes(b"%PDF")
+
+            rows = collect_pdfs(str(base))
+
+        self.assertEqual(rows[0][1], "Bikoney")
+        self.assertEqual(rows[0][2], "加拿大")
+        self.assertEqual(rows[0][3], "CA")
+
     def test_collect_pdfs_infers_brand_and_country_from_nested_folders(self) -> None:
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
@@ -66,6 +77,28 @@ class ReportPdfBatchTest(TestCase):
         self.assertEqual(rows[0][1], "TARNABY")
         self.assertEqual(rows[0][2], "德国")
         self.assertEqual(rows[0][3], "DE")
+
+    def test_collect_pdfs_skips_english_region_folder(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            target = base / "Bikoney" / "EMEA" / "德国" / "202605-汇总报告.pdf"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"%PDF")
+
+            rows = collect_pdfs(str(base))
+
+        self.assertEqual(rows[0][1], "Bikoney")
+
+    def test_collect_pdfs_rejects_country_as_filename_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            target = base / "Bikoney" / "德国" / "202605-德国-汇总报告.pdf"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"%PDF")
+
+            rows = collect_pdfs(str(base))
+
+        self.assertEqual(rows[0][1], "Bikoney")
 
     def test_store_initial_mismatch_warns_when_filename_and_pdf_initial_differ(self) -> None:
         warning = _store_initial_mismatch("VINAEMO", "Keebofly")

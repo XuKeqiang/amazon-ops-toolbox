@@ -10,7 +10,9 @@ $Port = $env:AMAZON_TOOLBOX_PORT
 if (-not $Port -and (Test-Path "config\app-config.json")) {
   try {
     $cfg = Get-Content "config\app-config.json" -Raw | ConvertFrom-Json
-    if ($cfg.PSObject.Properties["port"]) { $Port = [string]$cfg.port }
+    if ($cfg.server -and $cfg.server.PSObject.Properties["port"]) {
+      $Port = [string]$cfg.server.port
+    }
   } catch {}
 }
 if (-not $Port) { $Port = "8080" }

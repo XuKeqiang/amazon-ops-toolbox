@@ -26,6 +26,10 @@ COUNTRY_NAME_TO_CODE = {
     "爱尔兰": "IE", "波兰": "PL", "瑞典": "SE", "墨西哥": "MX",
     "沙特": "SA", "阿联酋": "AE", "日本": "JP", "澳洲": "AU", "澳大利亚": "AU",
 }
+REGION_DIRECTORY_NAMES = {
+    "全球", "欧洲", "欧洲站", "欧盟", "北美", "北美站", "南美", "拉丁美洲",
+    "亚洲", "东南亚", "中东", "大洋洲", "global", "eu", "emea", "apac", "latam",
+}
 CODE_TO_COUNTRY_NAME = {}
 for _country_name, _country_code in COUNTRY_NAME_TO_CODE.items():
     CODE_TO_COUNTRY_NAME.setdefault(_country_code, _country_name)
@@ -1160,7 +1164,7 @@ def extract_pdf(pdf_path, store, country, country_code=None):
         pdf_initial = _first_brand_initial(meta["display_name"])
         if filename_initial and pdf_initial and filename_initial != pdf_initial:
             meta["store_audit_status"] = (
-                f"品牌首字母不一致：文件名/目录店铺 {store} 首字母 {filename_initial}，"
+                f"店铺首字母不一致：文件名/目录店铺 {store} 首字母 {filename_initial}，"
                 f"PDF Display name {meta['display_name']} 首字母 {pdf_initial}，已采用文件名/目录"
             )
         else:
@@ -1301,10 +1305,11 @@ def collect_pdfs(base_dir):
             country_name = CODE_TO_COUNTRY_NAME.get(cc, country_name)
 
         # 优先级：文件名模式1(旧) > 文件名模式2(YYYYMM-品牌) > 目录路径推断
-        inferred_store = (
-            qname.group(1) if qname
-            else (fn_brand.group(2).strip() if fn_brand
-                  else _infer_store_from_path(directory_parts, country_name, base_path.name))
+        filename_store = fn_brand.group(2).strip() if fn_brand else ""
+        if filename_store and _is_non_store_directory(filename_store, country_name):
+            filename_store = ""
+        inferred_store = qname.group(1) if qname else (
+            filename_store or _infer_store_from_path(directory_parts, country_name, base_path.name)
         )
         pdfs.append((str(pdf_path), inferred_store, country_name or "未知", cc))
     return pdfs
@@ -1326,34 +1331,40 @@ def _infer_store_from_path(parts, country_name, fallback):
     以确保品牌名（通常是最靠近 PDF 的非国家文件夹）被正确选中。"""
     if not parts:
         return fallback
-    # 日期/期间类目录名的特征模式，用于排除
-    _date_patterns = re.compile(
+    # 从最内层向外遍历：品牌通常在最靠近 PDF 的那层目录
+    for part in reversed(parts):
+        if _is_non_store_directory(part, country_name):
+            continue
+        return part
+    # 兜底：如果全部被跳过了，返回最外层的非国家部分
+    for part in parts:
+        if _is_non_store_directory(part, country_name):
+            continue
+        return part
+    return fallback
+
+
+def _is_non_store_directory(value, country_name=""):
+    """判断路径片段是否属于国家、区域或报告期间等非店铺层级。"""
+    normalized = unicodedata.normalize("NFKC", str(value or "")).strip()
+    lowered = normalized.casefold()
+    if not normalized:
+        return True
+    if normalized == country_name or normalized in COUNTRY_NAME_TO_CODE:
+        return True
+    if any(name in normalized for name in COUNTRY_NAME_TO_CODE):
+        return True
+    if lowered in REGION_DIRECTORY_NAMES:
+        return True
+    return bool(re.search(
         r"\d{4}[\-年]\d{1,2}"          # 2026-1、2026年3
         r"|Q[1-4](?:[-–]Q[1-4])?"      # Q1、Q1-Q4
         r"|按(?:月|季度)"                # 按月、按季度
         r"|下载|汇总|报告|报表|账期|期间"
         r"|\d{4}(?:年)?(?:第[一二三四]?季)?",
+        normalized,
         re.IGNORECASE,
-    )
-    # 从最内层向外遍历：品牌通常在最靠近 PDF 的那层目录
-    for part in reversed(parts):
-        # 跳过国家名
-        if part == country_name or part in COUNTRY_NAME_TO_CODE:
-            continue
-        if any(name in part for name in COUNTRY_NAME_TO_CODE):
-            continue
-        # 跳过明显的日期/期间文件夹（如 "2026年1-3月及6月（按月下载）"）
-        if _date_patterns.search(part):
-            continue
-        return part
-    # 兜底：如果全部被跳过了，返回最外层的非国家部分
-    for part in parts:
-        if part == country_name or part in COUNTRY_NAME_TO_CODE:
-            continue
-        if any(name in part for name in COUNTRY_NAME_TO_CODE):
-            continue
-        return part
-    return fallback
+    ))
 
 HEADERS = ["店铺","国家/站点","站点代码","货币","报告期","年份","月份","季度",
            "大类","原始字段","英文字段","中文标准字段",
