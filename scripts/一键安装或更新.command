@@ -106,7 +106,7 @@ if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
 fi
 if [ ! -x "$ROOT_DIR/.venv/bin/python" ]; then
   log "首次安装依赖（使用清华镜像，可能需要几分钟，请耐心等待）..."
-  PY="$PY" bash "$ROOT_DIR/scripts/setup-cn.sh"
+  PYTHON="$PY" bash "$ROOT_DIR/scripts/setup-cn.sh"
 else
   "$ROOT_DIR/.venv/bin/python" -m pip install -q -r "$ROOT_DIR/requirements.txt" 2>&1 | tail -3
   log "依赖已就绪"
@@ -225,6 +225,19 @@ for i in $(seq 1 40); do
   fi
   sleep 0.5
 done
+if [ "$READY" -ne 1 ]; then
+  log "launchd 未能拉起服务，改用后台进程方式启动..."
+  if [ "$LAUNCHD_OK" -eq 1 ]; then
+    launchctl bootout "gui/$UID_VAL/$LABEL" 2>/dev/null || true
+  fi
+  bash "$ROOT_DIR/scripts/start.sh" >/dev/null 2>&1 || true
+  for i in $(seq 1 40); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+      exec 3>&- 2>/dev/null; READY=1; break
+    fi
+    sleep 0.5
+  done
+fi
 if [ "$READY" -eq 1 ]; then
   log "服务已在 http://127.0.0.1:$PORT/ 运行"
   LOCAL_IP="$(ipconfig getifaddr en0 2>/dev/null)"

@@ -60,6 +60,10 @@ class SystemUpdateTest(unittest.TestCase):
         self.assertTrue(result["dirty"])
         self.assertEqual(result["changes"], [" M config/local.json"])
 
+    def test_workspace_memory_does_not_block_update(self) -> None:
+        status = "?? .workbuddy/memory/MEMORY.md\n?? app/new_module.py"
+        self.assertEqual(server._actionable_git_changes(status), ["?? app/new_module.py"])
+
     def test_update_status_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             status_path = Path(temp_dir) / "status.json"

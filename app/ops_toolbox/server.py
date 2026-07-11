@@ -1875,7 +1875,7 @@ def _check_system_update() -> dict:
     branch = _run_git("branch", "--show-current")
     if not branch:
         raise OSError("当前仓库处于分离 HEAD 状态")
-    changes = [line for line in _run_git("status", "--short").splitlines() if line.strip()]
+    changes = _actionable_git_changes(_run_git("status", "--short"))
     current_full = _run_git("rev-parse", "HEAD")
     current_short = _run_git("rev-parse", "--short", "HEAD")
     _run_git("fetch", "--prune", "origin", timeout=180)
@@ -1894,6 +1894,21 @@ def _check_system_update() -> dict:
         "dirty": bool(changes),
         "changes": changes[:20],
     }
+
+
+def _actionable_git_changes(status_output: str) -> list[str]:
+    """Keep real repository changes while ignoring known workspace metadata."""
+    ignored_prefixes = (".workbuddy/",)
+    changes = []
+    for line in status_output.splitlines():
+        if not line.strip():
+            continue
+        path_text = line[3:].strip() if len(line) > 3 else line.strip()
+        candidate_paths = [part.strip() for part in path_text.split(" -> ")]
+        if any(path.startswith(ignored_prefixes) for path in candidate_paths):
+            continue
+        changes.append(line)
+    return changes
 
 
 def _read_update_status() -> dict:

@@ -3,6 +3,7 @@ __pycache__/
 .DS_Store
 .venv/
 node_modules/
+.workbuddy/
 
 # Local runtime data and credentials
 data/
