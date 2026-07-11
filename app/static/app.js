@@ -58,6 +58,7 @@ const state = {
   lastTransactionTask: null,
   lastWalmartTransactionTask: null,
   lastPortFeeTask: null,
+  systemUpdateMonitoring: false,
 };
 
 const els = {
@@ -243,6 +244,11 @@ const els = {
   pathSettingsList: document.querySelector("#pathSettingsList"),
   processingSettingsList: document.querySelector("#processingSettingsList"),
   deploymentSettingsList: document.querySelector("#deploymentSettingsList"),
+  systemUpdatePanel: document.querySelector("#systemUpdatePanel"),
+  systemUpdateVersionList: document.querySelector("#systemUpdateVersionList"),
+  systemUpdateNotice: document.querySelector("#systemUpdateNotice"),
+  checkSystemUpdateButton: document.querySelector("#checkSystemUpdateButton"),
+  applySystemUpdateButton: document.querySelector("#applySystemUpdateButton"),
   userManagementPanel: document.querySelector("#userManagementPanel"),
   userForm: document.querySelector("#userForm"),
   newUsername: document.querySelector("#newUsername"),
@@ -1247,6 +1253,14 @@ els.reportColumnMenuButtons.forEach((button) => {
 
 els.refreshSettingsButton.addEventListener("click", () => {
   loadSettings();
+});
+
+els.checkSystemUpdateButton.addEventListener("click", () => {
+  checkSystemUpdate();
+});
+
+els.applySystemUpdateButton.addEventListener("click", () => {
+  applySystemUpdate();
 });
 
 els.userForm.addEventListener("submit", async (event) => {
@@ -3418,10 +3432,134 @@ function renderSettings(payload) {
     <p>${escapeHtml(note)}</p>
   `).join("");
   const canManageUsers = Boolean(payload.permissions && payload.permissions.can_manage_users);
+  const canUpdateSystem = Boolean(payload.permissions && payload.permissions.can_update_system);
+  els.systemUpdatePanel.classList.toggle("hidden", !canUpdateSystem);
   els.userManagementPanel.classList.toggle("hidden", !canManageUsers);
   if (canManageUsers) {
     loadUsers();
   }
+  const pendingUpdateToken = window.localStorage.getItem("pulseSystemUpdateToken");
+  if (canUpdateSystem && pendingUpdateToken && !state.systemUpdateMonitoring) {
+    monitorSystemUpdate(pendingUpdateToken);
+  }
+}
+
+async function checkSystemUpdate() {
+  setSystemUpdateBusy(true);
+  renderSystemUpdateNotice("正在检查", "正在连接远端仓库，请稍候…", "working");
+  try {
+    const response = await fetch("/api/system-update/check", { method: "POST" });
+    const payload = await response.json();
+    if (response.status === 401) {
+      showLoggedOut();
+      return;
+    }
+    if (!response.ok) {
+      renderSystemUpdateNotice("检查失败", payload.error || "无法读取远端版本", "error");
+      return;
+    }
+    renderSystemUpdateCheck(payload);
+  } catch (error) {
+    renderSystemUpdateNotice("连接失败", "请确认部署机可以访问 GitHub。", "error");
+  } finally {
+    setSystemUpdateBusy(false);
+  }
+}
+
+function renderSystemUpdateCheck(payload) {
+  els.systemUpdateVersionList.innerHTML = renderDefinitionList({
+    "当前分支": payload.branch,
+    "当前版本": payload.current_version,
+    "远程版本": payload.remote_version,
+  });
+  els.applySystemUpdateButton.classList.add("hidden");
+  els.applySystemUpdateButton.dataset.remoteVersion = payload.remote_version || "";
+  if (payload.dirty) {
+    renderSystemUpdateNotice("暂不能更新", `部署机有 ${payload.changes.length} 项未提交改动，请先联系维护人员处理。`, "warning");
+  } else if (payload.ahead > 0) {
+    renderSystemUpdateNotice("暂不能自动更新", `部署机比远端多 ${payload.ahead} 个提交，需要人工确认。`, "warning");
+  } else if (payload.update_available) {
+    els.applySystemUpdateButton.classList.remove("hidden");
+    renderSystemUpdateNotice("发现新版本", `远端有 ${payload.behind} 个新提交。更新期间服务会短暂中断。`, "success");
+  } else {
+    renderSystemUpdateNotice("已是最新版本", "当前不需要更新。", "success");
+  }
+}
+
+async function applySystemUpdate() {
+  const remoteVersion = els.applySystemUpdateButton.dataset.remoteVersion || "最新版本";
+  const confirmed = window.confirm(`即将更新到 ${remoteVersion}\n\n更新会拉取代码、安装依赖并重启服务。处理中的临时任务会中断，历史记录和已导出文件不会删除。\n\n确定现在更新吗？`);
+  if (!confirmed) return;
+  setSystemUpdateBusy(true);
+  renderSystemUpdateNotice("正在准备更新", "请不要关闭这个页面。", "working");
+  try {
+    const response = await fetch("/api/system-update/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmed: true }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      renderSystemUpdateNotice("无法开始更新", payload.error || "更新请求失败", "error");
+      setSystemUpdateBusy(false);
+      return;
+    }
+    if (payload.already_latest) {
+      renderSystemUpdateNotice("已是最新版本", "无需执行更新。", "success");
+      setSystemUpdateBusy(false);
+      return;
+    }
+    window.localStorage.setItem("pulseSystemUpdateToken", payload.token);
+    monitorSystemUpdate(payload.token);
+  } catch (error) {
+    renderSystemUpdateNotice("请求中断", "服务可能已进入重启阶段，页面将继续检查。", "warning");
+  }
+}
+
+async function monitorSystemUpdate(token) {
+  if (state.systemUpdateMonitoring) return;
+  state.systemUpdateMonitoring = true;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 16 * 60 * 1000) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2500));
+    try {
+      const response = await fetch("/api/system-update/status", {
+        cache: "no-store",
+        headers: { "X-Update-Token": token },
+      });
+      if (!response.ok) continue;
+      const payload = await response.json();
+      const phase = payload.phase || "running";
+      renderSystemUpdateNotice(phase === "completed" ? "更新完成" : phase === "failed" ? "更新失败" : "正在更新", payload.message || "请稍候…", phase === "completed" ? "success" : phase === "failed" ? "error" : "working");
+      if (phase === "completed") {
+        window.localStorage.removeItem("pulseSystemUpdateToken");
+        state.systemUpdateMonitoring = false;
+        window.setTimeout(() => window.location.reload(), 1800);
+        return;
+      }
+      if (phase === "failed") {
+        window.localStorage.removeItem("pulseSystemUpdateToken");
+        state.systemUpdateMonitoring = false;
+        setSystemUpdateBusy(false);
+        return;
+      }
+    } catch (error) {
+      renderSystemUpdateNotice("正在重启服务", "暂时无法连接，恢复后将自动刷新。", "working");
+    }
+  }
+  renderSystemUpdateNotice("等待超时", "请手动刷新页面，或联系维护人员查看更新日志。", "warning");
+  state.systemUpdateMonitoring = false;
+  setSystemUpdateBusy(false);
+}
+
+function setSystemUpdateBusy(busy) {
+  els.checkSystemUpdateButton.disabled = busy;
+  els.applySystemUpdateButton.disabled = busy;
+}
+
+function renderSystemUpdateNotice(title, message, tone = "") {
+  els.systemUpdateNotice.className = `update-notice ${tone}`.trim();
+  els.systemUpdateNotice.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(message)}</span>`;
 }
 
 function renderSettingsError(message) {

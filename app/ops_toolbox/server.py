@@ -4,6 +4,8 @@ import argparse
 import json
 import mimetypes
 import shutil
+import subprocess
+import sys
 import uuid
 import zipfile
 from dataclasses import dataclass
@@ -61,6 +63,7 @@ OUTPUT_ROOT = CONFIG.output_root
 USER_STORE = CONFIG.user_store
 DATABASE_PATH = CONFIG.database_path
 ALLOWED_INPUT_ROOTS = CONFIG.allowed_input_roots
+UPDATE_STATUS_PATH = DATA_ROOT / "web-update-status.json"
 
 
 @dataclass
@@ -108,6 +111,8 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_history()
         elif parsed.path == "/api/settings":
             self._handle_settings()
+        elif parsed.path == "/api/system-update/status":
+            self._handle_system_update_status()
         elif parsed.path == "/api/users":
             self._handle_users()
         elif parsed.path == "/api/export":
@@ -139,6 +144,10 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
             self._handle_logout()
         elif parsed.path == "/api/users":
             self._handle_create_user()
+        elif parsed.path == "/api/system-update/check":
+            self._handle_system_update_check()
+        elif parsed.path == "/api/system-update/apply":
+            self._handle_system_update_apply()
         elif parsed.path == "/api/report-pdf/preflight-folder":
             self._handle_report_preflight_folder()
         elif parsed.path == "/api/report-pdf/preflight-upload":
@@ -326,6 +335,84 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         if not user:
             return
         self._send_json(_settings_payload(self.server.server_address, user))
+
+    def _handle_system_update_check(self) -> None:
+        admin = self._require_admin()
+        if not admin:
+            return
+        try:
+            result = _check_system_update()
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._send_json({"error": f"检查更新失败：{exc}"}, status=502)
+            return
+        self._send_json(result)
+
+    def _handle_system_update_apply(self) -> None:
+        admin = self._require_admin()
+        if not admin:
+            return
+        payload = self._read_json()
+        if payload.get("confirmed") is not True:
+            self._send_json({"error": "请先确认更新和服务重启"}, status=400)
+            return
+        current = _read_update_status()
+        if current.get("phase") in {"queued", "running", "restarting"}:
+            self._send_json({"error": "已有更新任务正在执行"}, status=409)
+            return
+        try:
+            check = _check_system_update()
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._send_json({"error": f"更新前检查失败：{exc}"}, status=502)
+            return
+        if check["dirty"]:
+            self._send_json({"error": "部署机存在未提交改动，为避免覆盖已停止更新", "details": check["changes"]}, status=409)
+            return
+        if check["ahead"]:
+            self._send_json({"error": "部署机包含远端没有的提交，为避免丢失已停止更新"}, status=409)
+            return
+        if not check["update_available"]:
+            self._send_json({"already_latest": True, "check": check})
+            return
+
+        token = uuid.uuid4().hex + uuid.uuid4().hex
+        _write_update_status({
+            "token": token,
+            "phase": "queued",
+            "message": "更新任务已创建，即将拉取代码",
+            "from_version": check["current_version"],
+            "to_version": check["remote_version"],
+            "updated_at": _now_label(),
+        })
+        log_path = DATA_ROOT / "logs" / "web-update.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_handle = log_path.open("ab")
+        try:
+            subprocess.Popen(
+                [sys.executable, str(PROJECT_ROOT / "scripts" / "web-update-runner.py"), token],
+                cwd=PROJECT_ROOT,
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        finally:
+            log_handle.close()
+        record_operation(
+            DATABASE_PATH,
+            operation="system_update",
+            owner=admin,
+            target_type="system",
+            message=f"启动系统更新：{check['current_version']} -> {check['remote_version']}",
+        )
+        self._send_json({"started": True, "token": token, "check": check}, status=202)
+
+    def _handle_system_update_status(self) -> None:
+        token = self.headers.get("X-Update-Token", "").strip()
+        status_payload = _read_update_status()
+        if not token or token != status_payload.get("token"):
+            self._send_json({"error": "更新状态凭证无效"}, status=403)
+            return
+        self._send_json({key: value for key, value in status_payload.items() if key != "token"})
 
     def _handle_users(self) -> None:
         user = self._require_admin()
@@ -1722,6 +1809,7 @@ def _settings_payload(server_address: tuple[str, int], user: dict) -> dict:
         "permissions": {
             "can_process_files": True,
             "can_manage_users": user.get("role") == "admin",
+            "can_update_system": user.get("role") == "admin",
             "history_scope": "全部任务" if user.get("role") == "admin" else "仅本人任务",
         },
         "service": {
@@ -1756,6 +1844,65 @@ def _settings_payload(server_address: tuple[str, int], user: dict) -> dict:
             "端口、允许扫描目录和上传大小限制可通过 config/app-config.json 调整。",
         ],
     }
+
+
+def _run_git(*args: str, timeout: int = 60) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=PROJECT_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+    )
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "Git 命令执行失败").strip()
+        raise subprocess.SubprocessError(message)
+    return result.stdout.strip()
+
+
+def _check_system_update() -> dict:
+    if not (PROJECT_ROOT / ".git").is_dir():
+        raise OSError("当前部署目录不是 Git 仓库")
+    branch = _run_git("branch", "--show-current")
+    if not branch:
+        raise OSError("当前仓库处于分离 HEAD 状态")
+    changes = [line for line in _run_git("status", "--short").splitlines() if line.strip()]
+    current_full = _run_git("rev-parse", "HEAD")
+    current_short = _run_git("rev-parse", "--short", "HEAD")
+    _run_git("fetch", "--prune", "origin", timeout=180)
+    remote_ref = f"origin/{branch}"
+    remote_full = _run_git("rev-parse", remote_ref)
+    remote_short = _run_git("rev-parse", "--short", remote_ref)
+    behind = int(_run_git("rev-list", "--count", f"HEAD..{remote_ref}") or "0")
+    ahead = int(_run_git("rev-list", "--count", f"{remote_ref}..HEAD") or "0")
+    return {
+        "branch": branch,
+        "current_version": current_short,
+        "remote_version": remote_short,
+        "update_available": current_full != remote_full and behind > 0,
+        "behind": behind,
+        "ahead": ahead,
+        "dirty": bool(changes),
+        "changes": changes[:20],
+    }
+
+
+def _read_update_status() -> dict:
+    if not UPDATE_STATUS_PATH.is_file():
+        return {}
+    try:
+        payload = json.loads(UPDATE_STATUS_PATH.read_text("utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_update_status(payload: dict) -> None:
+    UPDATE_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = UPDATE_STATUS_PATH.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+    temp_path.replace(UPDATE_STATUS_PATH)
 
 
 def _record_history(

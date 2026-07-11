@@ -890,6 +890,24 @@
               <h2>部署说明</h2>
               <div id="deploymentSettingsList" class="settings-stack"></div>
             </div>
+            <div id="systemUpdatePanel" class="settings-panel full-span hidden">
+              <span class="section-label">管理员</span>
+              <h2>系统更新</h2>
+              <div class="update-layout">
+                <div>
+                  <p class="update-description">检查并拉取 GitHub 远端的最新代码。更新时会自动检查本地改动、安装依赖并重启服务。</p>
+                  <dl id="systemUpdateVersionList" class="settings-list update-version-list"></dl>
+                </div>
+                <div class="update-actions">
+                  <button id="checkSystemUpdateButton" class="button secondary" type="button">检查更新</button>
+                  <button id="applySystemUpdateButton" class="button primary hidden" type="button">立即更新</button>
+                </div>
+              </div>
+              <div id="systemUpdateNotice" class="update-notice" role="status" aria-live="polite">
+                <strong>尚未检查</strong>
+                <span>点击“检查更新”获取远端版本。</span>
+              </div>
+            </div>
             <div id="userManagementPanel" class="settings-panel full-span hidden">
               <span class="section-label">管理员</span>
               <h2>用户管理</h2>
