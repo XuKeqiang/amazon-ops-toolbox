@@ -17,6 +17,7 @@ LOG_DIR="$ROOT_DIR/data/logs"
 APP_DEST="$HOME/Applications"
 APP_NAME="Pulse"
 LABEL="com.ecom.ops-toolbox.server"
+ICON="$ROOT_DIR/app/static/images/pulse-logo.icns"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 PORT="8080"
 UID_VAL="$(id -u)"
@@ -116,7 +117,8 @@ make_app(){
   local name="$1" mode="$2"
   local app="$APP_DEST/$name.app"
   rm -rf "$app"
-  mkdir -p "$app/Contents/MacOS"
+  mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+  [ -f "$ICON" ] && cp "$ICON" "$app/Contents/Resources/icon.icns" 2>/dev/null || true
   cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -128,6 +130,7 @@ make_app(){
   <key>CFBundleIdentifier</key><string>$LABEL</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleVersion</key><string>1.0</string>
+  <key>CFBundleIconFile</key><string>icon</string>
 </dict>
 </plist>
 PLIST
