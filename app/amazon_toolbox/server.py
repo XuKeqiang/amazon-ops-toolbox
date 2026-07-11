@@ -1725,7 +1725,7 @@ def _settings_payload(server_address: tuple[str, int], user: dict) -> dict:
             "history_scope": "全部任务" if user.get("role") == "admin" else "仅本人任务",
         },
         "service": {
-            "name": "Amazon 经营工具箱",
+            "name": "电商经营数据工具箱",
             "address": f"http://{host}:{port}/",
             "status": "运行中",
         },

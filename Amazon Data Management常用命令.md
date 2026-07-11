@@ -1,0 +1,89 @@
+## Amazon Data Management
+
+默认是固定的：`http://127.0.0.1:8080/`
+
+配置位置在：
+
+[config/app-config.json](/Users/xukeqiang/Documents/Amazon_Data_Management/config/app-config.json)
+
+重点看这几项：
+
+```
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080
+  }
+}
+```
+
+含义：
+
+- `port: 8080`：端口号，决定访问地址后面的 `:8080`。
+- `host: 0.0.0.0`：允许局域网其他电脑访问。
+- 本机访问用：`http://127.0.0.1:8080/`
+- 同事访问用：`http://这台电脑的局域网IP:8080/`
+
+改完 `app-config.json` 后，需要重启服务才生效。
+
+**常用命令**
+进入项目目录：
+
+```
+cd /Users/xukeqiang/Documents/Amazon_Data_Management
+```
+
+启动系统：
+
+```
+bash scripts/start.sh
+```
+
+停止系统：
+
+```
+bash scripts/stop.sh
+```
+
+重启系统：
+
+```
+bash scripts/stop.sh
+bash scripts/start.sh
+```
+
+检查是否正常：
+
+```
+curl http://127.0.0.1:8080/api/health
+```
+
+打开系统：
+
+```
+open http://127.0.0.1:8080/
+```
+
+查看本机局域网 IP：
+
+```
+ipconfig getifaddr en0
+```
+
+更新代码并重启：
+
+```
+bash scripts/update.sh
+```
+
+查看日志：
+
+```
+tail -n 80 data/logs/server.log
+```
+
+首次安装或依赖修复：
+
+```
+bash scripts/setup-cn.sh
+```

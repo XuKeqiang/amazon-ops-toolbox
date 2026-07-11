@@ -1460,6 +1460,8 @@ function showLoggedOut() {
   els.masthead.classList.add("hidden");
   els.appShell.classList.add("hidden");
   els.exportMenuButton.disabled = true;
+  document.title = "登录 · 电商经营数据工具箱";
+  window.scrollTo(0, 0);
   els.loginPassword.focus();
 }
 
@@ -3567,6 +3569,17 @@ function setActiveView(view) {
   els.inspectorPanels.forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.inspectorPanel !== state.activeView);
   });
+  const viewTitles = {
+    shipment: "货件 PDF",
+    report: "汇总报告 PDF",
+    transaction: "交易明细 CSV",
+    walmartTransaction: "Walmart 交易数据",
+    portFee: "港杂费 PDF",
+    history: "历史任务",
+    settings: "系统设置",
+  };
+  document.title = `${viewTitles[state.activeView]} · 电商经营数据工具箱`;
+  window.scrollTo(0, 0);
   const isShipment = state.activeView === "shipment";
   els.exportMenu.classList.toggle("hidden", !isShipment);
   if (!isShipment) {

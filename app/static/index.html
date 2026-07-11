@@ -3,11 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Amazon Operations Toolbox</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
-    <link rel="stylesheet" href="/static/styles.css?v=20260707-design-fix" />
+    <title>电商经营数据工具箱</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260711-platform-polish" />
     <script>
       (function () {
         try {
@@ -24,10 +21,14 @@
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
       <form id="loginForm" class="login-panel" autocomplete="off">
-        <div class="brand-mark">A</div>
+        <div class="brand-mark" aria-hidden="true"></div>
         <div>
-          <p class="kicker">AMAZON TOOLBOX</p>
-          <h1>登录经营工具箱</h1>
+          <p class="kicker">COMMERCE OPERATIONS</p>
+          <h1>登录经营数据工具箱</h1>
+        </div>
+        <div class="login-platforms" aria-label="支持的平台">
+          <span><i class="platform-logo amazon-logo" aria-hidden="true"></i>Amazon</span>
+          <span><i class="platform-logo walmart-logo" aria-hidden="true"></i>Walmart</span>
         </div>
         <label for="loginUsername">用户名</label>
         <input id="loginUsername" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="请输入用户名" />
@@ -35,16 +36,16 @@
         <input id="loginPassword" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="请输入密码" />
         <button class="button accent" type="submit">登录</button>
         <p id="loginStatus" class="status-text">请输入管理员分配的账号和密码</p>
-        <p class="login-note">内部运营工具 · 仅限授权人员使用<br />如无法登录，请联系系统管理员</p>
+        <p class="login-note">Amazon 与 Walmart 经营数据处理平台<br />仅限团队授权人员使用</p>
       </form>
     </section>
 
     <header id="masthead" class="masthead hidden">
       <div class="masthead-brand">
-        <div class="brand-mark">A</div>
+        <div class="brand-mark" aria-hidden="true"></div>
         <div>
-          <strong>Amazon 经营工具箱</strong>
-          <span>Internal operations</span>
+          <strong>电商经营数据工具箱</strong>
+          <span>Commerce operations</span>
         </div>
       </div>
       <div class="masthead-actions">
@@ -72,26 +73,26 @@
           <span class="section-label">工作区</span>
         </div>
         <nav class="nav">
-          <div class="nav-group">
+          <div class="nav-group system-group">
             <span class="nav-group-title">系统</span>
             <button class="nav-item" type="button" data-view="history">历史任务</button>
             <button class="nav-item" type="button" data-view="settings">系统设置</button>
           </div>
-          <div class="nav-group">
+          <div class="nav-group platform-group amazon-group">
             <span class="nav-group-title">亚马逊</span>
             <button class="nav-item active" type="button" data-view="shipment">货件PDF处理</button>
             <button class="nav-item" type="button" data-view="report">汇总报告PDF</button>
             <button class="nav-item" type="button" data-view="transaction">交易明细CSV</button>
             <button class="nav-item" type="button" data-view="portFee">港杂费处理</button>
           </div>
-          <div class="nav-group">
+          <div class="nav-group platform-group walmart-group">
             <span class="nav-group-title">沃尔玛</span>
             <button class="nav-item" type="button" data-view="walmartTransaction">交易数据分析</button>
           </div>
         </nav>
         <div class="sidebar-note">
-          <span class="section-label">状态</span>
-          <strong>Alpha</strong>
+          <span class="section-label">运行状态</span>
+          <strong><span class="status-dot" aria-hidden="true"></span>内部试运行</strong>
         </div>
       </aside>
 
@@ -99,21 +100,21 @@
         <section id="shipmentView" class="view-panel" data-view-panel="shipment">
           <header class="topbar">
             <div>
-              <p class="kicker">货件 PDF</p>
+              <p class="kicker platform-kicker amazon-kicker">Amazon · 货件 PDF</p>
               <h1>外箱标识别与规范命名</h1>
             </div>
             <div class="topbar-actions">
-              <button class="button secondary" type="button" data-open-history="shipment_pdf">查看历史</button>
+              <button class="button secondary has-icon history-action" type="button" data-open-history="shipment_pdf">历史记录</button>
             </div>
           </header>
 
           <section class="input-band" aria-label="批次导入">
             <form id="uploadForm" class="dropzone">
-              <input id="fileInput" class="visually-hidden" name="files" type="file" accept="application/pdf,.pdf" multiple />
-              <input id="folderUploadInput" class="visually-hidden" name="folderFiles" type="file" multiple webkitdirectory directory />
+              <input id="fileInput" class="visually-hidden" name="files" type="file" accept="application/pdf,.pdf" multiple aria-hidden="true" tabindex="-1" hidden />
+              <input id="folderUploadInput" class="visually-hidden" name="folderFiles" type="file" multiple webkitdirectory directory aria-hidden="true" tabindex="-1" hidden />
               <div id="dropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择货件 PDF">
                 <strong>拖放货件 PDF 或文件夹</strong>
-                <span id="uploadSelectionText">支持一批 PDF 文件，也支持把一个文件夹直接拖进来</span>
+                <span id="uploadSelectionText">PDF 与文件夹可混合拖入；系统会逐个读取并核验文件名</span>
               </div>
               <div class="dropzone-actions">
                 <button class="button secondary compact" type="button" data-upload-picker="files">选择PDF</button>
@@ -123,14 +124,14 @@
             </form>
 
             <form id="folderForm" class="folder-form">
-              <label for="folderInput">服务器文件夹路径</label>
+              <label for="folderInput">服务器目录（高级）</label>
               <div class="inline-control">
                 <input id="folderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/shipments 或 C:/EcommerceData/shipments" />
                 <button class="button secondary" type="submit">扫描文件夹</button>
               </div>
             </form>
             <details class="task-controls" open>
-              <summary>任务控制</summary>
+              <summary>任务操作</summary>
               <button id="newShipmentTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelShipmentTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryShipmentTask" class="button secondary compact" type="button">重试上次任务</button>
@@ -144,7 +145,7 @@
               <span>上传、预处理、扫描进度</span>
             </div>
             <ol id="shipmentLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+              <li class="muted">任务开始后，这里会持续显示上传、读取、核验和导出进度。</li>
             </ol>
           </section>
 
@@ -236,21 +237,21 @@
         <section id="reportView" class="view-panel hidden" data-view-panel="report">
           <header class="topbar">
             <div>
-              <p class="kicker">汇总报告 PDF</p>
+              <p class="kicker platform-kicker amazon-kicker">Amazon · 汇总报告 PDF</p>
               <h1>汇总报告提取与核验</h1>
             </div>
             <div class="topbar-actions">
-              <button class="button secondary" type="button" data-open-history="report_pdf">查看历史</button>
+              <button class="button secondary has-icon history-action" type="button" data-open-history="report_pdf">历史记录</button>
             </div>
           </header>
 
           <section class="input-band" aria-label="汇总报告导入">
             <form id="reportUploadForm" class="dropzone">
-              <input id="reportFileInput" class="visually-hidden" name="reportFiles" type="file" multiple accept="application/pdf,.pdf" />
-              <input id="reportFolderUploadInput" class="visually-hidden" name="reportFolderFiles" type="file" multiple webkitdirectory directory />
+              <input id="reportFileInput" class="visually-hidden" name="reportFiles" type="file" multiple accept="application/pdf,.pdf" aria-hidden="true" tabindex="-1" hidden />
+              <input id="reportFolderUploadInput" class="visually-hidden" name="reportFolderFiles" type="file" multiple webkitdirectory directory aria-hidden="true" tabindex="-1" hidden />
               <div id="reportDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择汇总报告 PDF">
                 <strong>拖放汇总报告 PDF 或文件夹</strong>
-                <span id="reportUploadSelectionText">支持一批 PDF 文件，也支持品牌 / 国家多层文件夹</span>
+                <span id="reportUploadSelectionText">支持品牌 / 国家多层目录；处理前先预检店铺、站点与报告期</span>
               </div>
               <div class="dropzone-actions">
                 <button class="button secondary compact" type="button" data-report-upload-picker="files">选择PDF</button>
@@ -259,14 +260,14 @@
               </div>
             </form>
             <form id="reportFolderForm" class="folder-form wide">
-              <label for="reportFolderInput">服务器文件夹路径</label>
+              <label for="reportFolderInput">服务器目录（高级）</label>
               <div class="inline-control">
                 <input id="reportFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/reports 或 C:/EcommerceData/reports" />
                 <button class="button secondary" type="submit">提取并生成 Excel</button>
               </div>
             </form>
             <details class="task-controls" open>
-              <summary>任务控制</summary>
+              <summary>任务操作</summary>
               <button id="newReportTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelReportTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryReportTask" class="button secondary compact" type="button">重试上次任务</button>
@@ -280,7 +281,7 @@
               <span>读取、上传、解析、导出进度</span>
             </div>
             <ol id="reportLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+              <li class="muted">任务开始后，这里会持续显示预检、解析、核验和 Excel 生成进度。</li>
             </ol>
           </section>
 
@@ -334,7 +335,7 @@
               </div>
               <div class="panel-header-actions">
                 <div id="reportStatusText" class="status-text">等待导入</div>
-                <a id="reportDownload" class="button secondary compact disabled" href="#">下载 Excel</a>
+                <a id="reportDownload" class="button secondary compact has-icon download-action disabled" href="#">下载 Excel</a>
               </div>
             </div>
             <div id="reportReviewPanel" class="review-workbench hidden"></div>
@@ -372,21 +373,21 @@
         <section id="transactionView" class="view-panel hidden" data-view-panel="transaction">
           <header class="topbar">
             <div>
-              <p class="kicker">交易明细 CSV</p>
+              <p class="kicker platform-kicker amazon-kicker">Amazon · 交易明细 CSV</p>
               <h1>交易明细 CSV 清洗合并</h1>
             </div>
             <div class="topbar-actions">
-              <button class="button secondary" type="button" data-open-history="transaction_csv">查看历史</button>
+              <button class="button secondary has-icon history-action" type="button" data-open-history="transaction_csv">历史记录</button>
             </div>
           </header>
 
           <section class="input-band" aria-label="交易明细导入">
             <form id="transactionUploadForm" class="dropzone">
-              <input id="transactionFileInput" class="visually-hidden" name="transactionFiles" type="file" multiple accept=".csv,.xlsx,.xls" />
-              <input id="transactionFolderUploadInput" class="visually-hidden" name="transactionFolderFiles" type="file" multiple webkitdirectory directory />
+              <input id="transactionFileInput" class="visually-hidden" name="transactionFiles" type="file" multiple accept=".csv,.xlsx,.xls" aria-hidden="true" tabindex="-1" hidden />
+              <input id="transactionFolderUploadInput" class="visually-hidden" name="transactionFolderFiles" type="file" multiple webkitdirectory directory aria-hidden="true" tabindex="-1" hidden />
               <div id="transactionDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择交易明细文件">
                 <strong>拖放交易明细文件或文件夹</strong>
-                <span id="transactionUploadSelectionText">支持 .csv / .xlsx 文件，也支持品牌 / 国家多层文件夹</span>
+                <span id="transactionUploadSelectionText">支持 CSV / Excel 与多层目录；系统会统一字段并生成审计记录</span>
               </div>
               <div class="dropzone-actions">
                 <button class="button secondary compact" type="button" data-transaction-upload-picker="files">选择文件</button>
@@ -395,14 +396,14 @@
               </div>
             </form>
             <form id="transactionFolderForm" class="folder-form wide">
-              <label for="transactionFolderInput">服务器文件夹路径</label>
+              <label for="transactionFolderInput">服务器目录（高级）</label>
               <div class="inline-control">
                 <input id="transactionFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/amazon-payments 或 C:/EcommerceData/amazon-payments" />
                 <button class="button secondary" type="submit">清洗并生成 Excel</button>
               </div>
             </form>
             <details class="task-controls" open>
-              <summary>任务控制</summary>
+              <summary>任务操作</summary>
               <button id="newTransactionTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelTransactionTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryTransactionTask" class="button secondary compact" type="button">重试上次任务</button>
@@ -416,7 +417,7 @@
               <span>读取、清洗、合并、导出进度</span>
             </div>
             <ol id="transactionLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+              <li class="muted">任务开始后，这里会持续显示读取、字段清洗、合并和导出进度。</li>
             </ol>
           </section>
 
@@ -470,8 +471,8 @@
               </div>
               <div class="panel-header-actions">
                 <div id="transactionStatusText" class="status-text">等待导入</div>
-                <a id="transactionDownload" class="button secondary compact disabled" href="#">下载总表</a>
-                <a id="transactionAuditDownload" class="button secondary compact disabled" href="#">下载审计</a>
+                <a id="transactionDownload" class="button secondary compact has-icon download-action disabled" href="#">下载总表</a>
+                <a id="transactionAuditDownload" class="button secondary compact has-icon download-action disabled" href="#">下载审计</a>
               </div>
             </div>
             <div class="table-wrap">
@@ -501,21 +502,21 @@
         <section id="portFeeView" class="view-panel hidden" data-view-panel="portFee">
           <header class="topbar">
             <div>
-              <p class="kicker">港杂费 PDF</p>
+              <p class="kicker platform-kicker amazon-kicker">Amazon · 港杂费 PDF</p>
               <h1>港杂费发票提取</h1>
             </div>
             <div class="topbar-actions">
-              <button class="button secondary" type="button" data-open-history="port_fee_pdf">查看历史</button>
+              <button class="button secondary has-icon history-action" type="button" data-open-history="port_fee_pdf">历史记录</button>
             </div>
           </header>
 
           <section class="input-band" aria-label="港杂费发票导入">
             <form id="portFeeUploadForm" class="dropzone">
-              <input id="portFeeFileInput" class="visually-hidden" name="files" type="file" accept="application/pdf,.pdf" multiple />
-              <input id="portFeeFolderUploadInput" class="visually-hidden" name="folderFiles" type="file" multiple webkitdirectory directory />
+              <input id="portFeeFileInput" class="visually-hidden" name="files" type="file" accept="application/pdf,.pdf" multiple aria-hidden="true" tabindex="-1" hidden />
+              <input id="portFeeFolderUploadInput" class="visually-hidden" name="folderFiles" type="file" multiple webkitdirectory directory aria-hidden="true" tabindex="-1" hidden />
               <div id="portFeeDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择港杂费发票 PDF">
                 <strong>拖放港杂费发票 PDF 或文件夹</strong>
-                <span id="portFeeUploadSelectionText">支持一批 PDF 文件，也支持按日期 / 供应商分层的文件夹</span>
+                <span id="portFeeUploadSelectionText">支持批量 PDF 与日期 / 供应商目录；图片型发票会进入复核队列</span>
               </div>
               <div class="dropzone-actions">
                 <button class="button secondary compact" type="button" data-port-fee-upload-picker="files">选择PDF</button>
@@ -525,14 +526,14 @@
             </form>
 
             <form id="portFeeFolderForm" class="folder-form">
-              <label for="portFeeFolderInput">服务器文件夹路径</label>
+              <label for="portFeeFolderInput">服务器目录（高级）</label>
               <div class="inline-control">
                 <input id="portFeeFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/port-fee 或 C:/EcommerceData/port-fee" />
                 <button class="button secondary" type="submit">扫描文件夹</button>
               </div>
             </form>
             <details class="task-controls" open>
-              <summary>任务控制</summary>
+              <summary>任务操作</summary>
               <button id="newPortFeeTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelPortFeeTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryPortFeeTask" class="button secondary compact" type="button">重试上次任务</button>
@@ -546,7 +547,7 @@
               <span>上传、解析、导出进度</span>
             </div>
             <ol id="portFeeLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+              <li class="muted">任务开始后，这里会持续显示上传、发票解析、金额核验和导出进度。</li>
             </ol>
           </section>
 
@@ -600,7 +601,7 @@
               </div>
               <div class="panel-header-actions">
                 <div id="portFeeStatusText" class="status-text">等待导入</div>
-                <a id="portFeeDownload" class="button secondary compact disabled" href="#">下载 Excel</a>
+                <a id="portFeeDownload" class="button secondary compact has-icon download-action disabled" href="#">下载 Excel</a>
               </div>
             </div>
             <div class="table-wrap">
@@ -630,21 +631,21 @@
         <section id="walmartTransactionView" class="view-panel hidden" data-view-panel="walmartTransaction">
           <header class="topbar">
             <div>
-              <p class="kicker">沃尔玛 · 交易数据</p>
+              <p class="kicker platform-kicker walmart-kicker">Walmart · 交易数据</p>
               <h1>交易数据分析</h1>
             </div>
             <div class="topbar-actions">
-              <button class="button secondary" type="button" data-open-history="walmart_transaction">查看历史</button>
+              <button class="button secondary has-icon history-action" type="button" data-open-history="walmart_transaction">历史记录</button>
             </div>
           </header>
 
           <section class="input-band" aria-label="沃尔玛交易数据导入">
             <form id="walmartTransactionUploadForm" class="dropzone">
-              <input id="walmartTransactionFileInput" class="visually-hidden" name="walmartTransactionFiles" type="file" multiple accept=".xlsx,.xlsm" />
-              <input id="walmartTransactionFolderUploadInput" class="visually-hidden" name="walmartTransactionFolderFiles" type="file" multiple webkitdirectory directory />
+              <input id="walmartTransactionFileInput" class="visually-hidden" name="walmartTransactionFiles" type="file" multiple accept=".xlsx,.xlsm" aria-hidden="true" tabindex="-1" hidden />
+              <input id="walmartTransactionFolderUploadInput" class="visually-hidden" name="walmartTransactionFolderFiles" type="file" multiple webkitdirectory directory aria-hidden="true" tabindex="-1" hidden />
               <div id="walmartTransactionDropTarget" class="dropzone-target" tabindex="0" role="button" aria-label="拖放或选择沃尔玛财务报表">
                 <strong>拖放沃尔玛财务报表或文件夹</strong>
-                <span id="walmartTransactionUploadSelectionText">支持 .xlsx / .xlsm 文件，也支持多层文件夹</span>
+                <span id="walmartTransactionUploadSelectionText">支持 XLSX / XLSM 与多层目录；系统会统一账期和字段结构</span>
               </div>
               <div class="dropzone-actions">
                 <button class="button secondary compact" type="button" data-walmart-transaction-upload-picker="files">选择文件</button>
@@ -653,14 +654,14 @@
               </div>
             </form>
             <form id="walmartTransactionFolderForm" class="folder-form wide">
-              <label for="walmartTransactionFolderInput">服务器文件夹路径</label>
+              <label for="walmartTransactionFolderInput">服务器目录（高级）</label>
               <div class="inline-control">
                 <input id="walmartTransactionFolderInput" type="text" placeholder="例如：/Users/Shared/EcommerceData/walmart 或 C:/EcommerceData/walmart" />
                 <button class="button secondary" type="submit">清洗并生成 Excel</button>
               </div>
             </form>
             <details class="task-controls" open>
-              <summary>任务控制</summary>
+              <summary>任务操作</summary>
               <button id="newWalmartTransactionTask" class="button secondary compact" type="button">新建任务</button>
               <button id="cancelWalmartTransactionTask" class="button secondary compact danger" type="button">终止当前任务</button>
               <button id="retryWalmartTransactionTask" class="button secondary compact" type="button">重试上次任务</button>
@@ -674,7 +675,7 @@
               <span>读取、字段校准、合并、导出进度</span>
             </div>
             <ol id="walmartTransactionLogList" class="log-list" aria-live="polite">
-              <li class="muted">等待拖放文件、选择文件或扫描服务器文件夹。</li>
+              <li class="muted">任务开始后，这里会持续显示读取、字段校准、合并和导出进度。</li>
             </ol>
           </section>
 
@@ -728,8 +729,8 @@
               </div>
               <div class="panel-header-actions">
                 <div id="walmartTransactionStatusText" class="status-text">等待导入</div>
-                <a id="walmartTransactionDownload" class="button secondary compact disabled" href="#">下载总表</a>
-                <a id="walmartTransactionAuditDownload" class="button secondary compact disabled" href="#">下载审计</a>
+                <a id="walmartTransactionDownload" class="button secondary compact has-icon download-action disabled" href="#">下载总表</a>
+                <a id="walmartTransactionAuditDownload" class="button secondary compact has-icon download-action disabled" href="#">下载审计</a>
               </div>
             </div>
             <div class="table-wrap">
@@ -758,7 +759,7 @@
         <section id="historyView" class="view-panel hidden" data-view-panel="history">
           <header class="topbar">
             <div>
-              <p class="kicker">历史任务</p>
+              <p class="kicker system-kicker history-kicker">系统 · 历史任务</p>
               <h1>历史任务</h1>
             </div>
             <div class="topbar-actions">
@@ -859,7 +860,7 @@
         <section id="settingsView" class="view-panel hidden" data-view-panel="settings">
           <header class="topbar">
             <div>
-              <p class="kicker">系统设置</p>
+              <p class="kicker system-kicker settings-kicker">系统 · 设置</p>
               <h1>系统设置</h1>
             </div>
             <div class="topbar-actions">
@@ -985,6 +986,6 @@
       </aside>
     </div>
 
-    <script src="/static/app.js?v=20260705-table-upload"></script>
+    <script src="/static/app.js?v=20260711-platform-polish"></script>
   </body>
 </html>
