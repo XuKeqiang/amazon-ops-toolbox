@@ -150,13 +150,13 @@ Windows 路径建议在配置里写成这种形式：
 macOS：
 
 ```bash
-export AMAZON_TOOLBOX_ADMIN_PASSWORD='换成你的强密码'
+export OPS_TOOLBOX_ADMIN_PASSWORD='换成你的强密码'
 ```
 
 Windows PowerShell：
 
 ```powershell
-$env:AMAZON_TOOLBOX_ADMIN_PASSWORD = "换成你的强密码"
+$env:OPS_TOOLBOX_ADMIN_PASSWORD = "换成你的强密码"
 ```
 
 如果没有设置，默认管理员账号是：
@@ -408,7 +408,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 密码：admin123
 ```
 
-如果部署时设置过 `AMAZON_TOOLBOX_ADMIN_PASSWORD`，就使用你设置的新密码。
+如果部署时设置过 `OPS_TOOLBOX_ADMIN_PASSWORD`，就使用你设置的新密码。
 
 ### 扫描服务器文件夹失败
 

@@ -59,7 +59,7 @@ The first screen is the working tool, not a landing page. The visual system is r
 The first phase runs with one Python command:
 
 ```bash
-python -m app.amazon_toolbox.server --host 0.0.0.0 --port 8080
+python -m app.ops_toolbox.server --host 0.0.0.0 --port 8080
 ```
 
 For a company intranet server, the machine opens port `8080`; teammates visit `http://<server-ip>:8080/`. The repository can later be pushed to GitHub and deployed by pulling code on the server. Docker can be added after the Python workflow is stable.

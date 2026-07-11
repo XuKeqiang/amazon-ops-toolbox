@@ -3,8 +3,8 @@ $ErrorActionPreference = "Stop"
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RootDir
 
-$BackupDir = if ($env:AMAZON_TOOLBOX_BACKUP_DIR) { $env:AMAZON_TOOLBOX_BACKUP_DIR } else { Join-Path $RootDir "data\backups" }
-$RetentionDays = if ($env:AMAZON_TOOLBOX_BACKUP_RETENTION_DAYS) { [int]$env:AMAZON_TOOLBOX_BACKUP_RETENTION_DAYS } else { 14 }
+$BackupDir = if ($env:OPS_TOOLBOX_BACKUP_DIR) { $env:OPS_TOOLBOX_BACKUP_DIR } else { Join-Path $RootDir "data\backups" }
+$RetentionDays = if ($env:OPS_TOOLBOX_BACKUP_RETENTION_DAYS) { [int]$env:OPS_TOOLBOX_BACKUP_RETENTION_DAYS } else { 14 }
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Archive = Join-Path $BackupDir "amazon-toolbox-backup-$Timestamp.zip"
 

@@ -2,7 +2,7 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from app.amazon_toolbox.auth import (
+from app.ops_toolbox.auth import (
     ensure_user_store,
     hash_password,
     load_users,

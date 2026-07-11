@@ -12,10 +12,10 @@
 
 ## File Structure
 
-- `app/amazon_toolbox/shipment_pdf/models.py`: dataclasses for extracted records, validation, and rename plans.
-- `app/amazon_toolbox/shipment_pdf/extractor.py`: PDF text extraction and field parsing.
-- `app/amazon_toolbox/shipment_pdf/batch.py`: folder scanning, export table generation, and safe rename execution.
-- `app/amazon_toolbox/server.py`: local intranet HTTP server and JSON/export endpoints.
+- `app/ops_toolbox/shipment_pdf/models.py`: dataclasses for extracted records, validation, and rename plans.
+- `app/ops_toolbox/shipment_pdf/extractor.py`: PDF text extraction and field parsing.
+- `app/ops_toolbox/shipment_pdf/batch.py`: folder scanning, export table generation, and safe rename execution.
+- `app/ops_toolbox/server.py`: local intranet HTTP server and JSON/export endpoints.
 - `app/static/index.html`: single-page internal toolbox UI.
 - `app/static/styles.css`: responsive enterprise SaaS styling.
 - `app/static/app.js`: upload, scan, table rendering, export, and rename interactions.

@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.amazon_toolbox.config import load_config
-from app.amazon_toolbox.storage import (
+from app.ops_toolbox.config import load_config
+from app.ops_toolbox.storage import (
     delete_task,
     get_task,
     init_db,

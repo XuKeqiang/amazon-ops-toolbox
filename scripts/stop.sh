@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 PID_FILE="$ROOT_DIR/data/server.pid"
 
-PORT="${AMAZON_TOOLBOX_PORT:-}"
+PORT="${OPS_TOOLBOX_PORT:-}"
 if [[ -z "$PORT" && -f "$ROOT_DIR/config/app-config.json" ]]; then
   PORT="$(grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]\+' "$ROOT_DIR/config/app-config.json" 2>/dev/null | grep -o '[0-9]\+' | head -1 || true)"
 fi
@@ -17,7 +17,7 @@ if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
   PYTHON="$ROOT_DIR/.venv/bin/python"
 fi
 
-SERVER_PATTERN="app\.amazon_toolbox\.server"
+SERVER_PATTERN="app\.ops_toolbox\.server"
 
 # 1) 按 pid 文件停
 if [[ -f "$PID_FILE" ]]; then
@@ -84,4 +84,4 @@ for pid in set(pids):
 PY
 fi
 
-echo "已尝试停止 Amazon Operations Toolbox（端口 ${PORT:-8080}）。"
+echo "已尝试停止 Ops Toolbox（端口 ${PORT:-8080}）。"

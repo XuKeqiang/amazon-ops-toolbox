@@ -9,7 +9,7 @@ PID_FILE="$ROOT_DIR/data/server.pid"
 mkdir -p "$LOG_DIR"
 
 # ---- 解析端口：环境变量 > 配置文件 > 默认 8080 ----
-PORT="${AMAZON_TOOLBOX_PORT:-}"
+PORT="${OPS_TOOLBOX_PORT:-}"
 if [[ -z "$PORT" && -f "$ROOT_DIR/config/app-config.json" ]]; then
   PORT="$(grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]\+' "$ROOT_DIR/config/app-config.json" 2>/dev/null | grep -o '[0-9]\+' | head -1 || true)"
 fi
@@ -23,7 +23,7 @@ fi
 PYTHON="$ROOT_DIR/.venv/bin/python"
 
 # 服务进程命令行特征：无论用 start.sh 还是 `python -m` 直接起，都会命中
-SERVER_PATTERN="app.amazon_toolbox.server"
+SERVER_PATTERN="app.ops_toolbox.server"
 
 # 兜底清理：按进程名杀掉所有服务实例（覆盖重复启动 / 直接 python -m 启动 / 无 pid 文件 等情况）
 kill_by_pattern() {
@@ -82,13 +82,13 @@ fi
 
 # ---- 启动 ----
 ARGS=(--port "$PORT")
-if [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then
-  ARGS+=(--host "$AMAZON_TOOLBOX_HOST")
+if [[ -n "${OPS_TOOLBOX_HOST:-}" ]]; then
+  ARGS+=(--host "$OPS_TOOLBOX_HOST")
 fi
 
-nohup "$PYTHON" -m app.amazon_toolbox.server "${ARGS[@]}" >> "$LOG_DIR/server.log" 2>&1 &
+nohup "$PYTHON" -m app.ops_toolbox.server "${ARGS[@]}" >> "$LOG_DIR/server.log" 2>&1 &
 echo "$!" > "$PID_FILE"
-echo "Amazon Operations Toolbox 已启动，PID $(cat "$PID_FILE")，端口 ${PORT:-8080}。"
+echo "Ops Toolbox 已启动，PID $(cat "$PID_FILE")，端口 ${PORT:-8080}。"
 
 # ---- 等待端口就绪（最多约 5 秒，使用 bash /dev/tcp，不依赖 curl）----
 READY=0

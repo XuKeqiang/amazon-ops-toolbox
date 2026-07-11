@@ -4,7 +4,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from app.amazon_toolbox.walmart_transaction.batch import process_walmart_transaction_folder
+from app.ops_toolbox.walmart_transaction.batch import process_walmart_transaction_folder
 
 
 class WalmartTransactionProcessingTest(unittest.TestCase):

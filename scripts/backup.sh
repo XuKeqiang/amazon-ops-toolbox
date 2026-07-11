@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BACKUP_DIR="${AMAZON_TOOLBOX_BACKUP_DIR:-$ROOT_DIR/data/backups}"
-RETENTION_DAYS="${AMAZON_TOOLBOX_BACKUP_RETENTION_DAYS:-14}"
+BACKUP_DIR="${OPS_TOOLBOX_BACKUP_DIR:-$ROOT_DIR/data/backups}"
+RETENTION_DAYS="${OPS_TOOLBOX_BACKUP_RETENTION_DAYS:-14}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 ARCHIVE="$BACKUP_DIR/amazon-toolbox-backup-$TIMESTAMP.tar.gz"
 

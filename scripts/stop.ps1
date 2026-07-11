@@ -6,7 +6,7 @@ Set-Location $RootDir
 $PidFile = Join-Path $RootDir "data\server.pid"
 
 # ---- 解析端口：环境变量 > 配置文件 > 默认 8080 ----
-$Port = $env:AMAZON_TOOLBOX_PORT
+$Port = $env:OPS_TOOLBOX_PORT
 if (-not $Port -and (Test-Path "config\app-config.json")) {
   try {
     $cfg = Get-Content "config\app-config.json" -Raw | ConvertFrom-Json
@@ -26,7 +26,7 @@ if (Test-Path $PidFile) {
       $isServer = $false
       try {
         $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $pidText" -ErrorAction SilentlyContinue
-        if ($cim -and ($cim.CommandLine -like "*app.amazon_toolbox.server*")) { $isServer = $true }
+        if ($cim -and ($cim.CommandLine -like "*app.ops_toolbox.server*")) { $isServer = $true }
       } catch { $isServer = $true }  # 无法确认时按服务器处理，保证可停
       if ($isServer) {
         Write-Host "停止已记录进程 PID $pidText"
@@ -52,4 +52,4 @@ if ($conn) {
   }
 }
 
-Write-Host "已尝试停止 Amazon Operations Toolbox（端口 $Port）。"
+Write-Host "已尝试停止 Ops Toolbox（端口 $Port）。"

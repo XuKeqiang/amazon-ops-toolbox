@@ -17,7 +17,7 @@ def ensure_user_store(path: Path) -> None:
     if path.exists():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    password = os.environ.get("AMAZON_TOOLBOX_ADMIN_PASSWORD", "admin123")
+    password = os.environ.get("OPS_TOOLBOX_ADMIN_PASSWORD", "admin123")
     now = _now_label()
     user = {
         "id": uuid.uuid4().hex,

@@ -9,7 +9,7 @@ START_APP="$ROOT_DIR/$APP_NAME.app"
 STOP_APP="$ROOT_DIR/${APP_NAME}-停止.app"
 
 # 读取端口（与 start.sh 一致）
-PORT="${AMAZON_TOOLBOX_PORT:-}"
+PORT="${OPS_TOOLBOX_PORT:-}"
 if [[ -z "${PORT:-}" && -f "$ROOT_DIR/config/app-config.json" ]]; then
   PORT="$(grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]\+' "$ROOT_DIR/config/app-config.json" 2>/dev/null | grep -o '[0-9]\+' | head -1 || true)"
 fi

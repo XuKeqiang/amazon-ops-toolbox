@@ -1502,7 +1502,7 @@ class AmazonToolboxHandler(BaseHTTPRequestHandler):
         cookie = self.headers.get("Cookie", "")
         for part in cookie.split(";"):
             key, _, value = part.strip().partition("=")
-            if key == "amazon_toolbox_session":
+            if key == "ops_toolbox_session":
                 return value
         return ""
 
@@ -1862,11 +1862,11 @@ def _active_admin_count(users: list[dict]) -> int:
 
 
 def _session_cookie(token: str) -> str:
-    return f"amazon_toolbox_session={token}; Path=/; HttpOnly; SameSite=Lax"
+    return f"ops_toolbox_session={token}; Path=/; HttpOnly; SameSite=Lax"
 
 
 def _clear_session_cookie() -> str:
-    return "amazon_toolbox_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+    return "ops_toolbox_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
 
 
 def _now_label() -> str:

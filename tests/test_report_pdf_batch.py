@@ -2,8 +2,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from app.amazon_toolbox.report_pdf.batch import _duplicate_report_keys, _result_row, _store_initial_mismatch
-from app.amazon_toolbox.report_pdf.extract_amazon_reports import collect_pdfs
+from app.ops_toolbox.report_pdf.batch import _duplicate_report_keys, _result_row, _store_initial_mismatch
+from app.ops_toolbox.report_pdf.extract_amazon_reports import collect_pdfs
 
 
 class ReportPdfBatchTest(TestCase):

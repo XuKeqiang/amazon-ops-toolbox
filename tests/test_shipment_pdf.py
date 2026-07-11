@@ -4,10 +4,10 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from app.amazon_toolbox import server
-from app.amazon_toolbox.shipment_pdf import batch as shipment_batch
-from app.amazon_toolbox.shipment_pdf.batch import build_suggested_filename, package_by_factory, plan_renames
-from app.amazon_toolbox.shipment_pdf.extractor import parse_filename_info, parse_label_text
+from app.ops_toolbox import server
+from app.ops_toolbox.shipment_pdf import batch as shipment_batch
+from app.ops_toolbox.shipment_pdf.batch import build_suggested_filename, package_by_factory, plan_renames
+from app.ops_toolbox.shipment_pdf.extractor import parse_filename_info, parse_label_text
 
 
 AU_LABEL_TEXT = """FBA 纸箱编号 1，共 1 个纸箱 - 5.4 千克

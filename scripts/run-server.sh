@@ -14,12 +14,12 @@ if [[ ! -x "$ROOT_DIR/.venv/bin/python" ]]; then
 fi
 PYTHON="$ROOT_DIR/.venv/bin/python"
 
-if [[ -n "${AMAZON_TOOLBOX_HOST:-}" && -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
-  exec "$PYTHON" -m app.amazon_toolbox.server --host "$AMAZON_TOOLBOX_HOST" --port "$AMAZON_TOOLBOX_PORT"
-elif [[ -n "${AMAZON_TOOLBOX_HOST:-}" ]]; then
-  exec "$PYTHON" -m app.amazon_toolbox.server --host "$AMAZON_TOOLBOX_HOST"
-elif [[ -n "${AMAZON_TOOLBOX_PORT:-}" ]]; then
-  exec "$PYTHON" -m app.amazon_toolbox.server --port "$AMAZON_TOOLBOX_PORT"
+if [[ -n "${OPS_TOOLBOX_HOST:-}" && -n "${OPS_TOOLBOX_PORT:-}" ]]; then
+  exec "$PYTHON" -m app.ops_toolbox.server --host "$OPS_TOOLBOX_HOST" --port "$OPS_TOOLBOX_PORT"
+elif [[ -n "${OPS_TOOLBOX_HOST:-}" ]]; then
+  exec "$PYTHON" -m app.ops_toolbox.server --host "$OPS_TOOLBOX_HOST"
+elif [[ -n "${OPS_TOOLBOX_PORT:-}" ]]; then
+  exec "$PYTHON" -m app.ops_toolbox.server --port "$OPS_TOOLBOX_PORT"
 else
-  exec "$PYTHON" -m app.amazon_toolbox.server
+  exec "$PYTHON" -m app.ops_toolbox.server
 fi

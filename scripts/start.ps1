@@ -10,7 +10,7 @@ $ErrLog = Join-Path $LogDir "server.err.log"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 # ---- 解析端口：环境变量 > 配置文件 > 默认 8080 ----
-$Port = $env:AMAZON_TOOLBOX_PORT
+$Port = $env:OPS_TOOLBOX_PORT
 if (-not $Port -and (Test-Path "config\app-config.json")) {
   try {
     $cfg = Get-Content "config\app-config.json" -Raw | ConvertFrom-Json
@@ -43,7 +43,7 @@ function Stop-ByPidFile {
         $isServer = $false
         try {
           $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $pidText" -ErrorAction SilentlyContinue
-          if ($cim -and ($cim.CommandLine -like "*app.amazon_toolbox.server*")) { $isServer = $true }
+          if ($cim -and ($cim.CommandLine -like "*app.ops_toolbox.server*")) { $isServer = $true }
         } catch { $isServer = $true }  # 无法确认时按服务器处理，保证可停
         if ($isServer) {
           Write-Host "停止已记录进程 PID $pidText"
@@ -71,8 +71,8 @@ if (-not (Test-Path $VenvPython)) {
 $Python = $VenvPython
 
 # ---- 启动 ----
-$Arguments = @("-m", "app.amazon_toolbox.server", "--port", $Port)
-if ($env:AMAZON_TOOLBOX_HOST) { $Arguments += @("--host", $env:AMAZON_TOOLBOX_HOST) }
+$Arguments = @("-m", "app.ops_toolbox.server", "--port", $Port)
+if ($env:OPS_TOOLBOX_HOST) { $Arguments += @("--host", $env:OPS_TOOLBOX_HOST) }
 
 $Process = Start-Process `
   -FilePath $Python `
@@ -94,7 +94,7 @@ for ($i = 1; $i -le 10; $i++) {
 }
 
 if ($Ready) {
-  Write-Host "Amazon Operations Toolbox 已启动，PID $($Process.Id)，端口 $Port。"
+  Write-Host "Ops Toolbox 已启动，PID $($Process.Id)，端口 $Port。"
   Write-Host "服务就绪：http://127.0.0.1:$Port/  （日志: $OutLog 和 $ErrLog）"
 } else {
   Write-Host "警告：端口 $Port 在预期时间内未就绪，请查看日志：$ErrLog" -ForegroundColor Yellow

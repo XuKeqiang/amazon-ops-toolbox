@@ -81,13 +81,13 @@ Windows 路径建议使用正斜杠，避免 JSON 转义问题：
 macOS：
 
 ```bash
-export AMAZON_TOOLBOX_ADMIN_PASSWORD='替换成强密码'
+export OPS_TOOLBOX_ADMIN_PASSWORD='替换成强密码'
 ```
 
 Windows PowerShell：
 
 ```powershell
-$env:AMAZON_TOOLBOX_ADMIN_PASSWORD = "替换成强密码"
+$env:OPS_TOOLBOX_ADMIN_PASSWORD = "替换成强密码"
 ```
 
 然后启动。

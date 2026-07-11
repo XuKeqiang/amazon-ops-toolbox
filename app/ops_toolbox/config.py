@@ -35,7 +35,7 @@ class AppConfig:
 
 
 def load_config(config_path: Path | None = None) -> AppConfig:
-    path = config_path or Path(os.environ.get("AMAZON_TOOLBOX_CONFIG", DEFAULT_CONFIG_PATH)).expanduser()
+    path = config_path or Path(os.environ.get("OPS_TOOLBOX_CONFIG", DEFAULT_CONFIG_PATH)).expanduser()
     raw = _read_json(path)
 
     server = raw.get("server", {})
@@ -57,17 +57,17 @@ def load_config(config_path: Path | None = None) -> AppConfig:
 
     return AppConfig(
         config_path=path,
-        host=str(server.get("host", os.environ.get("AMAZON_TOOLBOX_HOST", "127.0.0.1"))),
-        port=int(server.get("port", os.environ.get("AMAZON_TOOLBOX_PORT", "8080"))),
+        host=str(server.get("host", os.environ.get("OPS_TOOLBOX_HOST", "127.0.0.1"))),
+        port=int(server.get("port", os.environ.get("OPS_TOOLBOX_PORT", "8080"))),
         data_root=data_root,
         upload_root=upload_root,
         output_root=output_root,
         database_path=database_path,
         user_store=user_store,
         allowed_input_roots=allowed_input_roots,
-        max_upload_mb=int(limits.get("max_upload_mb", os.environ.get("AMAZON_TOOLBOX_MAX_UPLOAD_MB", "500"))),
+        max_upload_mb=int(limits.get("max_upload_mb", os.environ.get("OPS_TOOLBOX_MAX_UPLOAD_MB", "500"))),
         backup_root=backup_root,
-        backup_retention_days=int(backups.get("retention_days", os.environ.get("AMAZON_TOOLBOX_BACKUP_RETENTION_DAYS", "14"))),
+        backup_retention_days=int(backups.get("retention_days", os.environ.get("OPS_TOOLBOX_BACKUP_RETENTION_DAYS", "14"))),
     )
 
 

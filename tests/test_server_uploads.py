@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import unittest
 
-from app.amazon_toolbox.server import AmazonToolboxHandler
+from app.ops_toolbox.server import AmazonToolboxHandler
 
 
 class MultipartUploadParsingTest(unittest.TestCase):

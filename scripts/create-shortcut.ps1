@@ -6,7 +6,7 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $AppName = "电商经营数据工具箱"
 
 # 读取端口
-$Port = $env:AMAZON_TOOLBOX_PORT
+$Port = $env:OPS_TOOLBOX_PORT
 if (-not $Port -and (Test-Path (Join-Path $RootDir "config\app-config.json"))) {
     try {
         $cfg = Get-Content (Join-Path $RootDir "config\app-config.json") -Raw | ConvertFrom-Json
