@@ -3,7 +3,7 @@
 $ErrorActionPreference = "Stop"
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
-$AppName = "Amazon 经营工具箱"
+$AppName = "电商经营数据工具箱"
 
 # 读取端口
 $Port = $env:AMAZON_TOOLBOX_PORT
@@ -51,10 +51,10 @@ for (`$i = 1; `$i -le 15; `$i++) {
 if (`$Ready) {
     Start-Process "http://127.0.0.1:$Port/"
     [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
-    [System.Windows.Forms.MessageBox]::Show("服务已启动，浏览器已打开。`nhttp://127.0.0.1:$Port/", "Amazon 经营工具箱", "OK", "Information") | Out-Null
+    [System.Windows.Forms.MessageBox]::Show("服务已启动，浏览器已打开。`nhttp://127.0.0.1:$Port/", "电商经营数据工具箱", "OK", "Information") | Out-Null
 } else {
     [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
-    [System.Windows.Forms.MessageBox]::Show("启动失败，请查看 data\logs\server.log", "Amazon 经营工具箱", "OK", "Warning") | Out-Null
+    [System.Windows.Forms.MessageBox]::Show("启动失败，请查看 data\logs\server.log", "电商经营数据工具箱", "OK", "Warning") | Out-Null
 }
 "@ | Set-Content -Path $LauncherScript -Encoding UTF8
 
@@ -73,18 +73,18 @@ function Create-Shortcut {
 
 # 开始菜单 — 启动
 $StartLnk = Join-Path $StartMenuDir "$AppName.lnk"
-Create-Shortcut -ShortcutPath $StartLnk -TargetScript $LauncherScript -Description "启动 Amazon 经营工具箱"
+Create-Shortcut -ShortcutPath $StartLnk -TargetScript $LauncherScript -Description "启动 电商经营数据工具箱"
 
 # 桌面 — 启动
 $DesktopLnk = Join-Path $DesktopDir "$AppName.lnk"
 if (-not (Test-Path $DesktopLnk)) {
-    Create-Shortcut -ShortcutPath $DesktopLnk -TargetScript $LauncherScript -Description "启动 Amazon 经营工具箱"
+    Create-Shortcut -ShortcutPath $DesktopLnk -TargetScript $LauncherScript -Description "启动 电商经营数据工具箱"
     Write-Host "已创建桌面快捷方式: $DesktopLnk"
 }
 
 # 开始菜单 — 停止
 $StopLnk = Join-Path $StartMenuDir "$AppName-停止.lnk"
-Create-Shortcut -ShortcutPath $StopLnk -TargetScript (Join-Path $RootDir "scripts\stop.ps1") -Description "停止 Amazon 经营工具箱"
+Create-Shortcut -ShortcutPath $StopLnk -TargetScript (Join-Path $RootDir "scripts\stop.ps1") -Description "停止 电商经营数据工具箱"
 
 Write-Host ""
 Write-Host "✓ 创建完成"

@@ -1,4 +1,4 @@
-# Amazon 经营工具箱内网部署说明
+# 电商经营数据工具箱内网部署说明
 
 ## 推荐部署方式
 
@@ -28,8 +28,8 @@ http://<服务器局域网IP>:8080/
 macOS 服务器电脑上执行：
 
 ```bash
-git clone <your-github-repo-url> Amazon_Data_Management
-cd Amazon_Data_Management
+git clone <your-github-repo-url> 电商经营数据工具箱
+cd 电商经营数据工具箱
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
@@ -38,8 +38,8 @@ python3 -m venv .venv
 Windows PowerShell 执行：
 
 ```powershell
-git clone <your-github-repo-url> Amazon_Data_Management
-cd Amazon_Data_Management
+git clone <your-github-repo-url> 电商经营数据工具箱
+cd 电商经营数据工具箱
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -191,14 +191,14 @@ data/logs/server.err.log
 macOS：
 
 ```bash
-cd Amazon_Data_Management
+cd 电商经营数据工具箱
 bash scripts/update.sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-cd Amazon_Data_Management
+cd 电商经营数据工具箱
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\update.ps1
 ```
 

@@ -153,6 +153,7 @@ TRANSACTION_TYPE_CN = {
 TRANSACTION_DESCRIPTION_CN = {
     "Purchase": "购买/销售",
     "WFS Fulfillment fee": "WFS履单费",
+    "WFS Charge": "WFS费用",
     "Return Refund": "退货退款",
     "SEM Marketing": "SEM营销费",
     "WFS StorageFee": "WFS仓储费",
@@ -177,6 +178,7 @@ TRANSACTION_DESCRIPTION_CN = {
 
 AMOUNT_TYPE_CN = {
     "Fee/Reimbursement": "费用/补偿",
+    "WFS Fee/Reimbursement": "WFS费/补偿",
     "Product Price": "商品售价",
     "Commission on Product": "商品佣金",
     "Product tax": "商品税",
@@ -198,6 +200,7 @@ DATA_TYPE_BY_AMOUNT = {
     "Product tax withheld": "商品税(预扣)",
     "SEM Marketing Fee": "SEM营销费",
     "Total Walmart Funded Savings": "沃尔玛资助折扣",
+    "WFS Fee/Reimbursement": "WFS费/补偿",
     "Review Accelerator Fee": "评价加速计划费",
     "Other tax (Fees)": "其他税费",
     "Ocean freight and related services": "海运及相关服务",
@@ -207,6 +210,7 @@ DATA_TYPE_BY_AMOUNT = {
 
 DATA_TYPE_BY_DESCRIPTION = {
     "WFS Fulfillment fee": "WFS履单费",
+    "WFS Charge": "WFS费用",
     "WFS StorageFee": "WFS仓储费",
     "Walmart Product Advertising": "商品广告费",
     "WFS Return Processing Fee": "WFS退货处理费",

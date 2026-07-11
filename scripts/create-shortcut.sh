@@ -3,8 +3,8 @@
 # 用法：bash scripts/create-shortcut.sh
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Amazon 经营工具箱"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+APP_NAME="电商经营数据工具箱"
 START_APP="$ROOT_DIR/$APP_NAME.app"
 STOP_APP="$ROOT_DIR/${APP_NAME}-停止.app"
 
@@ -60,7 +60,7 @@ write_info_plist "$START_APP" "$APP_NAME" "com.trustdecision.amazon-toolbox.star
 
 cat > "$START_APP/Contents/MacOS/launcher" <<LAUNCHER
 #!/usr/bin/env bash
-# Amazon 经营工具箱 — 启动器（由 create-shortcut.sh 生成）
+# 电商经营数据工具箱 — 启动器（由 create-shortcut.sh 生成）
 # 项目路径在生成时写入，移动 .app 不影响使用
 PROJECT_DIR="$ROOT_DIR"
 PORT="${PORT}"
@@ -83,9 +83,9 @@ done
 
 if [[ "\${READY}" -eq 1 ]]; then
   /usr/bin/open "http://127.0.0.1:\${PORT}/"
-  /usr/bin/osascript -e 'display notification "服务已启动，浏览器已打开" with title "Amazon 经营工具箱" sound name "Glass"'
+  /usr/bin/osascript -e 'display notification "服务已启动，浏览器已打开" with title "电商经营数据工具箱" sound name "Glass"'
 else
-  /usr/bin/osascript -e 'display notification "启动失败，请查看 data/logs/server.log" with title "Amazon 经营工具箱" sound name "Basso"'
+  /usr/bin/osascript -e 'display notification "启动失败，请查看 data/logs/server.log" with title "电商经营数据工具箱" sound name "Basso"'
 fi
 LAUNCHER
 chmod +x "$START_APP/Contents/MacOS/launcher"
@@ -98,13 +98,13 @@ write_info_plist "$STOP_APP" "${APP_NAME}-停止" "com.trustdecision.amazon-tool
 
 cat > "$STOP_APP/Contents/MacOS/launcher" <<LAUNCHER
 #!/usr/bin/env bash
-# Amazon 经营工具箱 — 停止器（由 create-shortcut.sh 生成）
+# 电商经营数据工具箱 — 停止器（由 create-shortcut.sh 生成）
 PROJECT_DIR="$ROOT_DIR"
 
 cd "\$PROJECT_DIR"
 bash scripts/stop.sh >/dev/null 2>&1
 
-/usr/bin/osascript -e 'display notification "服务已停止" with title "Amazon 经营工具箱" sound name "Glass"'
+/usr/bin/osascript -e 'display notification "服务已停止" with title "电商经营数据工具箱" sound name "Glass"'
 LAUNCHER
 chmod +x "$STOP_APP/Contents/MacOS/launcher"
 
