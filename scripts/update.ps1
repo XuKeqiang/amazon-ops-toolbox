@@ -43,7 +43,7 @@ trap {
   throw
 }
 
-Write-Host "Amazon Operations Toolbox 更新开始"
+Write-Host "Ops Toolbox 更新开始"
 Write-Host "项目目录：$RootDir"
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -52,7 +52,7 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 if (-not (Test-Path ".git")) {
-  Write-Host "当前文件夹不是 Git 仓库。请先从 GitHub 拉取项目，或进入 amazon-ops-toolbox 项目目录后再运行。"
+  Write-Host "当前文件夹不是 Git 仓库。请先从 GitHub 拉取项目，或进入 ops-data-toolbox 项目目录后再运行。"
   exit 1
 }
 

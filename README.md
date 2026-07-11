@@ -47,19 +47,19 @@ macOS：
 
 ```bash
 cd ~/Documents
-git clone https://github.com/XuKeqiang/amazon-ops-toolbox.git
-cd amazon-ops-toolbox
+git clone https://github.com/XuKeqiang/ops-data-toolbox.git
+cd ops-data-toolbox
 ```
 
 Windows PowerShell：
 
 ```powershell
 cd $HOME\Documents
-git clone https://github.com/XuKeqiang/amazon-ops-toolbox.git
-cd amazon-ops-toolbox
+git clone https://github.com/XuKeqiang/ops-data-toolbox.git
+cd ops-data-toolbox
 ```
 
-以后所有操作都在这个 `amazon-ops-toolbox` 文件夹里执行。
+以后所有操作都在这个 `ops-data-toolbox` 文件夹里执行。
 
 ### 4. 安装 Python 依赖
 
@@ -283,14 +283,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup.ps1
 macOS：
 
 ```bash
-cd ~/Documents/amazon-ops-toolbox
+cd ~/Documents/ops-data-toolbox
 bash scripts/update.sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-cd $HOME\Documents\amazon-ops-toolbox
+cd $HOME\Documents\ops-data-toolbox
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\update.ps1
 ```
 
@@ -314,7 +314,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\update.ps1
 macOS：
 
 ```bash
-cd ~/Documents/amazon-ops-toolbox
+cd ~/Documents/ops-data-toolbox
 git pull --ff-only
 bash scripts/setup-cn.sh
 bash scripts/stop.sh
@@ -324,7 +324,7 @@ bash scripts/start.sh
 Windows PowerShell：
 
 ```powershell
-cd $HOME\Documents\amazon-ops-toolbox
+cd $HOME\Documents\ops-data-toolbox
 git pull --ff-only
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
@@ -457,7 +457,7 @@ Windows 示例：
 macOS：
 
 ```bash
-cd ~/Documents/amazon-ops-toolbox
+cd ~/Documents/ops-data-toolbox
 git pull --ff-only
 bash scripts/update.sh
 ```
@@ -465,7 +465,7 @@ bash scripts/update.sh
 Windows PowerShell：
 
 ```powershell
-cd $HOME\Documents\amazon-ops-toolbox
+cd $HOME\Documents\ops-data-toolbox
 git pull --ff-only
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\update.ps1
 ```

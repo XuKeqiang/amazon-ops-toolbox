@@ -16,7 +16,7 @@ fail_hint() {
 }
 trap fail_hint ERR
 
-echo "Amazon Operations Toolbox 更新开始"
+echo "Ops Toolbox 更新开始"
 echo "项目目录：$ROOT_DIR"
 
 if ! command -v git >/dev/null 2>&1; then
@@ -25,7 +25,7 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 if [[ ! -d ".git" ]]; then
-  echo "当前文件夹不是 Git 仓库。请先从 GitHub 拉取项目，或进入 amazon-ops-toolbox 项目目录后再运行。"
+  echo "当前文件夹不是 Git 仓库。请先从 GitHub 拉取项目，或进入 ops-data-toolbox 项目目录后再运行。"
   exit 1
 fi
 
