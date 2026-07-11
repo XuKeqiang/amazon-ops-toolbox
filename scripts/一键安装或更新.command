@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 电商经营数据工具箱 — macOS 一键安装 / 更新脚本
+# Pulse — macOS 一键安装 / 更新脚本
 # ============================================================
 # 用途：任何人（无需技术背景）双击本文件即可：
 #   1) 清理之前部署遗留的旧进程 / 旧开机任务 / 旧 App 入口
 #   2) 从 GitHub 拉取最新代码
 #   3) 准备 Python 运行环境（首次会联网安装依赖）
-#   4) 在「启动台 / 应用程序」里生成「电商经营数据工具箱」App（双击即打开软件）
+#   4) 在「启动台 / 应用程序」里生成「Pulse」App（双击即打开软件）
 #   5) 设置开机自动启动，并立即启动服务
 # 本脚本可重复运行（幂等），既可用于首次安装，也可用于日后更新。
 # ============================================================
@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$ROOT_DIR/data/logs"
 APP_DEST="$HOME/Applications"
-APP_NAME="电商经营数据工具箱"
+APP_NAME="Pulse"
 LABEL="com.ecom.ops-toolbox.server"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 PORT="8080"
@@ -56,10 +56,21 @@ for p in "$HOME"/Library/LaunchAgents/*.plist; do
     log "已清理旧开机任务: $(basename "$p")"
   fi
 done
-# 删除旧的 Amazon 品牌 App 入口（仓库根 / 应用程序 / 桌面）
+# 删除旧版本生成的 App 入口（按 CFBundleIdentifier 识别，兼容任何旧名称：
+# Amazon 经营工具箱 / 电商经营数据工具箱 / 旧 Pulse 等；覆盖仓库根 / 应用程序 / 桌面）
 for base in "$ROOT_DIR" "$APP_DEST" "$HOME/Desktop"; do
-  for d in "$base"/Amazon\ 经营工具箱*.app; do
-    [ -e "$d" ] && rm -rf "$d" && log "已删除旧 App 入口: $d" || true
+  for d in "$base"/*.app; do
+    [ -e "$d" ] || continue
+    bid="$(/usr/bin/defaults read "$d/Contents/Info.plist" CFBundleIdentifier 2>/dev/null)"
+    if [ "$bid" = "$LABEL" ]; then
+      rm -rf "$d" && log "已删除旧 App 入口: $d" || true
+    fi
+  done
+done
+# 兜底：删除已知旧品牌名称 App（防止个别系统 Info.plist 解析失败）
+for base in "$ROOT_DIR" "$APP_DEST" "$HOME/Desktop"; do
+  for d in "$base"/Amazon\ 经营工具箱*.app "$base"/电商经营数据工具箱*.app; do
+    [ -e "$d" ] && rm -rf "$d" && log "已删除旧品牌 App 入口: $d" || true
   done
 done
 # 检查旧环境变量痕迹（仅提示，不修改用户 shell 配置）
@@ -136,9 +147,9 @@ for i in $(seq 1 20); do
 done
 if [ "$READY" -eq 1 ]; then
   /usr/bin/open "http://127.0.0.1:$PORT/"
-  /usr/bin/osascript -e 'display notification "已打开 电商经营数据工具箱" with title "电商经营数据工具箱" sound name "Glass"'
+  /usr/bin/osascript -e 'display notification "已打开 Pulse" with title "Pulse" sound name "Glass"'
 else
-  /usr/bin/osascript -e 'display notification "服务未就绪，请双击“更新”脚本或重启电脑" with title "电商经营数据工具箱" sound name "Basso"'
+  /usr/bin/osascript -e 'display notification "服务未就绪，请双击“更新”脚本或重启电脑" with title "Pulse" sound name "Basso"'
 fi
 LAUNCH
   else
@@ -148,7 +159,7 @@ LABEL="com.ecom.ops-toolbox.server"
 PROJECT_DIR="__ROOT_DIR__"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 pkill -f "app.ops_toolbox.server" 2>/dev/null || true
-/usr/bin/osascript -e 'display notification "服务已停止" with title "电商经营数据工具箱" sound name "Glass"'
+/usr/bin/osascript -e 'display notification "服务已停止" with title "Pulse" sound name "Glass"'
 LAUNCH
   fi
   sed -i '' "s|__ROOT_DIR__|$ROOT_DIR|" "$app/Contents/MacOS/launcher"
