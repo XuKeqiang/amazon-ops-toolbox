@@ -254,12 +254,54 @@ def extract_port_fee_invoice(path: Path) -> dict:
 def write_port_fee_excel(rows: list[dict], details: list[dict], output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     detail_rows, detail_columns, detail_translations = _pivot_fee_details(details)
+    fee_columns = detail_columns[len(DETAIL_BASE_COLUMNS) :]
+    summary_rows = _add_fee_columns_to_summary(rows, detail_rows, fee_columns)
+    invoice_amount_index = SUMMARY_COLUMNS.index("Invoice Amount") + 1
+    summary_columns = [
+        *SUMMARY_COLUMNS[:invoice_amount_index],
+        *fee_columns,
+        *SUMMARY_COLUMNS[invoice_amount_index:],
+    ]
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        pd.DataFrame(rows, columns=SUMMARY_COLUMNS).to_excel(writer, sheet_name="发票汇总", index=False)
+        pd.DataFrame(summary_rows, columns=summary_columns).to_excel(writer, sheet_name="发票汇总", index=False)
         pd.DataFrame(detail_rows, columns=detail_columns).to_excel(writer, sheet_name="费用明细", index=False)
-        _add_bilingual_header(writer.sheets["发票汇总"], SUMMARY_COLUMNS, HEADER_CN)
+        _add_bilingual_header(
+            writer.sheets["发票汇总"],
+            summary_columns,
+            {**HEADER_CN, **detail_translations},
+        )
         _add_bilingual_header(writer.sheets["费用明细"], detail_columns, {**HEADER_CN, **detail_translations})
     return output_path
+
+
+def _add_fee_columns_to_summary(
+    rows: list[dict],
+    detail_rows: list[dict],
+    fee_columns: list[str],
+) -> list[dict]:
+    detail_by_remark = {
+        (
+            str(detail.get("来源文件", "")),
+            str(detail.get("Invoice No.", "")),
+            str(detail.get("Remark", "")),
+            str(detail.get("Currency", "")),
+        ): detail
+        for detail in detail_rows
+    }
+    summary_rows = []
+    for source_row in rows:
+        row = dict(source_row)
+        key = (
+            str(row.get("来源文件", "")),
+            str(row.get("Invoice No.", "")),
+            str(row.get("Remark", "")),
+            str(row.get("Currency", "")),
+        )
+        detail = detail_by_remark.get(key, {})
+        for fee_column in fee_columns:
+            row[fee_column] = detail.get(fee_column, "")
+        summary_rows.append(row)
+    return summary_rows
 
 
 def _add_bilingual_header(worksheet, columns: list[str], translations: dict[str, str]) -> None:
