@@ -47,19 +47,34 @@ SUMMARY_COLUMNS = [
     "问题说明",
 ]
 
-DETAIL_COLUMNS = [
+DETAIL_BASE_COLUMNS = [
     "来源文件",
-    "Invoice No.",
-    "Remark",
-    "费用描述",
+    "Invoice No.\n发票号",
+    "Remark\n备注",
     "柜号/箱号",
-    "Quantity",
-    "Unit",
-    "Unit Price",
-    "Currency",
-    "Amount",
-    "备注",
+    "Currency\n币种",
 ]
+
+FEE_DESCRIPTION_CN = {
+    "CFS RECEIVING CHARGE (CBM)": "CFS 收货费（按立方米）",
+    "PORT SECURITY PRO-RATE (CBM)": "港口安保费（按立方米）",
+    "SORTING CHARGES": "分拣费",
+    "DOCUMENTATION FEE": "文件费",
+    "CUSTOMS DECLARATION FEE": "报关费",
+    "CUSTOMS CLEARANCE FEE": "清关费",
+    "TERMINAL HANDLING CHARGE": "码头操作费",
+    "TERMINAL HANDLING CHARGES": "码头操作费",
+    "HANDLING CHARGE": "操作费",
+    "HANDLING CHARGES": "操作费",
+    "LOADING CHARGE": "装货费",
+    "UNLOADING CHARGE": "卸货费",
+    "TRUCKING FEE": "拖车费",
+    "TRUCKING CHARGE": "拖车费",
+    "WAREHOUSE CHARGE": "仓储费",
+    "WAREHOUSING CHARGE": "仓储费",
+    "INSPECTION FEE": "查验费",
+    "MANAGEMENT FEE": "管理费",
+}
 
 
 def process_port_fee_folder(folder: Path, output_dir: Path, job_id: str, label: str | None = None) -> PortFeePdfJob:
@@ -192,10 +207,69 @@ def extract_port_fee_invoice(path: Path) -> dict:
 
 def write_port_fee_excel(rows: list[dict], details: list[dict], output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    detail_rows, detail_columns = _pivot_fee_details(details)
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         pd.DataFrame(rows, columns=SUMMARY_COLUMNS).to_excel(writer, sheet_name="发票汇总", index=False)
-        pd.DataFrame(details, columns=DETAIL_COLUMNS).to_excel(writer, sheet_name="费用明细", index=False)
+        pd.DataFrame(detail_rows, columns=detail_columns).to_excel(writer, sheet_name="费用明细", index=False)
     return output_path
+
+
+def _pivot_fee_details(details: list[dict]) -> tuple[list[dict], list[str]]:
+    """将同一张发票的费用项横向展开，便于核对各项港杂费。"""
+    rows_by_invoice: dict[tuple[str, str, str, str], dict] = {}
+    fee_columns: set[str] = set()
+
+    for detail in details:
+        source_file = str(detail.get("来源文件", ""))
+        invoice_no = str(detail.get("Invoice No.", ""))
+        remark = str(detail.get("Remark", ""))
+        currency = str(detail.get("Currency", ""))
+        key = (source_file, invoice_no, remark, currency)
+        row = rows_by_invoice.setdefault(
+            key,
+            {
+                "来源文件": source_file,
+                "Invoice No.\n发票号": invoice_no,
+                "Remark\n备注": remark,
+                "柜号/箱号": [],
+                "Currency\n币种": currency,
+            },
+        )
+
+        containers = str(detail.get("柜号/箱号", "")).strip()
+        if containers:
+            row["柜号/箱号"].extend(part for part in containers.split("、") if part)
+
+        english_name = _fee_name_without_container(str(detail.get("费用描述", "")))
+        chinese_name = _translate_fee_description(english_name)
+        column = f"{english_name}\n{chinese_name}" if english_name else "未识别费用项\n未识别费用项"
+        fee_columns.add(column)
+        amount = _decimal(detail.get("Amount")) or Decimal("0")
+        row[column] = (row.get(column) or Decimal("0")) + amount
+
+    result = []
+    for row in rows_by_invoice.values():
+        row["柜号/箱号"] = "、".join(sorted(set(row["柜号/箱号"])))
+        for column in fee_columns:
+            if column in row:
+                row[column] = _format_decimal(row[column])
+            else:
+                row[column] = ""
+        result.append(row)
+    return result, [*DETAIL_BASE_COLUMNS, *sorted(fee_columns)]
+
+
+def _fee_name_without_container(description: str) -> str:
+    return re.sub(r"\s*\([A-Z]{4}\d{7}\)", "", description).strip()
+
+
+def _translate_fee_description(description: str) -> str:
+    normalized = re.sub(r"\s+", " ", description).strip().upper()
+    return FEE_DESCRIPTION_CN.get(normalized, "待补充中文翻译")
+
+
+def _format_decimal(value: Decimal) -> str:
+    return format(value.quantize(Decimal("0.01")), "f")
 
 
 def label_name(label: str) -> str:
