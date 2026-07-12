@@ -57,12 +57,30 @@ DETAIL_BASE_COLUMNS = [
     "Currency",
 ]
 
+DETAIL_REPORT_COLUMNS = [
+    "来源文件",
+    "Invoice No.",
+    "Remark",
+    "费用描述",
+    "费用描述中文含义",
+    "柜号/箱号",
+    "Quantity",
+    "Unit",
+    "Unit Price",
+    "Currency",
+    "Amount",
+    "备注",
+]
+
 HEADER_EN = {
     "来源文件": "Source File",
     "费用明细行数": "Detail Row Count",
     "状态": "Status",
     "问题说明": "Issues",
     "柜号/箱号": "Container No.",
+    "费用描述": "Fee Description",
+    "费用描述中文含义": "Fee Description (Chinese)",
+    "备注": "Notes",
 }
 
 HEADER_CN = {
@@ -90,6 +108,13 @@ HEADER_CN = {
     "状态": "状态",
     "问题说明": "问题说明",
     "柜号/箱号": "柜号/箱号",
+    "费用描述": "费用描述",
+    "费用描述中文含义": "费用描述中文含义",
+    "Quantity": "数量",
+    "Unit": "计费单位",
+    "Unit Price": "单价",
+    "Amount": "金额",
+    "备注": "备注",
 }
 
 FEE_DESCRIPTION_CN = {
@@ -254,6 +279,7 @@ def extract_port_fee_invoice(path: Path) -> dict:
 def write_port_fee_excel(rows: list[dict], details: list[dict], output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     detail_rows, detail_columns, detail_translations = _pivot_fee_details(details)
+    translated_details = _add_chinese_fee_descriptions(details)
     fee_columns = detail_columns[len(DETAIL_BASE_COLUMNS) :]
     summary_rows = _add_fee_columns_to_summary(rows, detail_rows, fee_columns)
     invoice_amount_index = SUMMARY_COLUMNS.index("Invoice Amount") + 1
@@ -264,14 +290,28 @@ def write_port_fee_excel(rows: list[dict], details: list[dict], output_path: Pat
     ]
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         pd.DataFrame(summary_rows, columns=summary_columns).to_excel(writer, sheet_name="发票汇总", index=False)
-        pd.DataFrame(detail_rows, columns=detail_columns).to_excel(writer, sheet_name="费用明细", index=False)
+        pd.DataFrame(translated_details, columns=DETAIL_REPORT_COLUMNS).to_excel(
+            writer,
+            sheet_name="费用明细",
+            index=False,
+        )
         _add_bilingual_header(
             writer.sheets["发票汇总"],
             summary_columns,
             {**HEADER_CN, **detail_translations},
         )
-        _add_bilingual_header(writer.sheets["费用明细"], detail_columns, {**HEADER_CN, **detail_translations})
+        _add_bilingual_header(writer.sheets["费用明细"], DETAIL_REPORT_COLUMNS, HEADER_CN)
     return output_path
+
+
+def _add_chinese_fee_descriptions(details: list[dict]) -> list[dict]:
+    translated_details = []
+    for source_detail in details:
+        detail = dict(source_detail)
+        english_name = _fee_name_without_container(str(detail.get("费用描述", "")))
+        detail["费用描述中文含义"] = _translate_fee_description(english_name)
+        translated_details.append(detail)
+    return translated_details
 
 
 def _add_fee_columns_to_summary(
