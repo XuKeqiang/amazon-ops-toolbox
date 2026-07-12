@@ -49,10 +49,13 @@ def main() -> int:
     token = sys.argv[1]
     time.sleep(2)
     write_status(token, "running", "正在拉取远端代码并更新依赖")
+    env = dict(os.environ)
+    env.setdefault("PYTHON", sys.executable)
     try:
         result = subprocess.run(
             update_command(),
             cwd=ROOT,
+            env=env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
