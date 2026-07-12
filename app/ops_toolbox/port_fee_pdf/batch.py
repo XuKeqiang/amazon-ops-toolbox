@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 import pdfplumber
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 
 @dataclass
@@ -59,6 +61,15 @@ FEE_DESCRIPTION_CN = {
     "CFS RECEIVING CHARGE (CBM)": "CFS 收货费（按立方米）",
     "PORT SECURITY PRO-RATE (CBM)": "港口安保费（按立方米）",
     "SORTING CHARGES": "分拣费",
+    "SORTING CHARGE (CBM)": "分拣费（按立方米）",
+    "DOCUMENTATION ADMIN FEE (INBOUND)": "进口单证管理费",
+    "EXTRA CFS CHARGE (CBM)": "额外 CFS 操作费（按立方米）",
+    "ORIGIN CFS LABELING": "起运地 CFS 标签费",
+    "SHIFTING CHARGE IN WAREHOUSE": "仓库移位费",
+    "STORAGE CHARGE (CBM PER DAY)": "仓储费（按立方米/天）",
+    "THC PRO-RATE (CBM)": "码头操作费（按立方米）",
+    "VAT OUTPUT PAYABLE/VAT INPUT RECOVERABLE": "应付销项增值税/可抵扣进项增值税",
+    "VGM SUBMISSION/FILING FEE (CBM)": "VGM 申报备案费（按立方米）",
     "DOCUMENTATION FEE": "文件费",
     "CUSTOMS DECLARATION FEE": "报关费",
     "CUSTOMS CLEARANCE FEE": "清关费",
@@ -211,7 +222,32 @@ def write_port_fee_excel(rows: list[dict], details: list[dict], output_path: Pat
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         pd.DataFrame(rows, columns=SUMMARY_COLUMNS).to_excel(writer, sheet_name="发票汇总", index=False)
         pd.DataFrame(detail_rows, columns=detail_columns).to_excel(writer, sheet_name="费用明细", index=False)
+        _format_port_fee_worksheet(writer.sheets["发票汇总"], fixed_columns=SUMMARY_COLUMNS)
+        _format_port_fee_worksheet(writer.sheets["费用明细"], fixed_columns=DETAIL_BASE_COLUMNS)
     return output_path
+
+
+def _format_port_fee_worksheet(worksheet, fixed_columns: list[str]) -> None:
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+    header_fill = PatternFill("solid", fgColor="D9EAF7")
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    worksheet.row_dimensions[1].height = 45
+
+    for column_index, header_cell in enumerate(worksheet[1], start=1):
+        header = str(header_cell.value or "")
+        if header in fixed_columns:
+            width = max(14, min(24, max(len(part) for part in header.split("\n")) + 4))
+        else:
+            width = 30
+        worksheet.column_dimensions[get_column_letter(column_index)].width = width
+
+    for row in worksheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=False)
 
 
 def _pivot_fee_details(details: list[dict]) -> tuple[list[dict], list[str]]:
@@ -260,12 +296,46 @@ def _pivot_fee_details(details: list[dict]) -> tuple[list[dict], list[str]]:
 
 
 def _fee_name_without_container(description: str) -> str:
-    return re.sub(r"\s*\([A-Z]{4}\d{7}\)", "", description).strip()
+    cleaned = re.sub(r"\s*\([A-Z]{4}\d{7}\)", "", description).strip()
+    normalized = re.sub(r"\s+", " ", cleaned).upper()
+    if normalized.startswith("(") and re.search(r"\)\s*GES$", normalized):
+        return "SORTING CHARGES"
+    return cleaned
 
 
 def _translate_fee_description(description: str) -> str:
     normalized = re.sub(r"\s+", " ", description).strip().upper()
-    return FEE_DESCRIPTION_CN.get(normalized, "待补充中文翻译")
+    exact = FEE_DESCRIPTION_CN.get(normalized)
+    if exact:
+        return exact
+
+    patterns = (
+        (r"DOCUMENTATION.*ADMIN.*FEE.*INBOUND", "进口单证管理费"),
+        (r"DOCUMENTATION.*ADMIN.*FEE", "单证管理费"),
+        (r"EXTRA.*CFS.*CHARGE", "额外 CFS 操作费"),
+        (r"ORIGIN.*CFS.*LABEL", "起运地 CFS 标签费"),
+        (r"PORT.*SECURITY", "港口安保费"),
+        (r"SHIFTING.*WAREHOUSE", "仓库移位费"),
+        (r"SORTING.*CHARGE", "分拣费"),
+        (r"STORAGE.*CHARGE", "仓储费"),
+        (r"THC.*PRO.?RATE", "码头操作费"),
+        (r"VAT.*OUTPUT.*VAT.*INPUT", "应付销项增值税/可抵扣进项增值税"),
+        (r"VGM.*(?:SUBMISSION|FILING)", "VGM 申报备案费"),
+        (r"CFS.*RECEIVING", "CFS 收货费"),
+        (r"CUSTOMS.*DECLARATION", "报关费"),
+        (r"CUSTOMS.*CLEARANCE", "清关费"),
+        (r"TRUCK", "拖车费"),
+        (r"WAREHOUS", "仓储费"),
+        (r"INSPECTION", "查验费"),
+        (r"HANDLING", "操作费"),
+        (r"UNLOADING", "卸货费"),
+        (r"LOADING", "装货费"),
+    )
+    for pattern, chinese_name in patterns:
+        if re.search(pattern, normalized):
+            suffix = "（按立方米）" if "CBM" in normalized and "立方米" not in chinese_name else ""
+            return f"{chinese_name}{suffix}"
+    return "其他港杂费（请核对英文原文）"
 
 
 def _format_decimal(value: Decimal) -> str:
