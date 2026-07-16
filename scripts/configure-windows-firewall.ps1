@@ -22,6 +22,6 @@ New-NetFirewallRule `
   -Action Allow `
   -Protocol TCP `
   -LocalPort $Port `
-  -Profile Private | Out-Null
+  -Profile Private,Domain | Out-Null
 
-Write-Host "Windows 防火墙已允许专用网络访问 TCP 端口 $Port。"
+Write-Host "Windows 防火墙已允许专用网络和公司域网络访问 TCP 端口 $Port。"
