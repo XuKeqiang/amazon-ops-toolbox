@@ -27,7 +27,7 @@ if (Test-Path $PidFile) {
       try {
         $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $pidText" -ErrorAction SilentlyContinue
         if ($cim -and ($cim.CommandLine -like "*app.ops_toolbox.server*")) { $isServer = $true }
-      } catch { $isServer = $true }  # 无法确认时按服务器处理，保证可停
+      } catch { $isServer = $false }
       if ($isServer) {
         Write-Host "停止已记录进程 PID $pidText"
         Stop-Process -Id $pidText -Force -ErrorAction SilentlyContinue
@@ -42,13 +42,22 @@ if (Test-Path $PidFile) {
   Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
 }
 
-# 2) 兜底：按端口释放（覆盖“直接 python -m 启动、无 pid 文件”等情况）
+# 2) 兜底：只停止端口上确认属于本系统的进程
 $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 if ($conn) {
   $pids = $conn.OwningProcess | Sort-Object -Unique
-  Write-Host "端口 $Port 仍被占用，释放进程: $($pids -join ', ')"
   foreach ($p in $pids) {
-    try { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } catch {}
+    $isServer = $false
+    try {
+      $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $p" -ErrorAction SilentlyContinue
+      if ($cim -and ($cim.CommandLine -like "*app.ops_toolbox.server*")) { $isServer = $true }
+    } catch {}
+    if ($isServer) {
+      Write-Host "停止占用端口 $Port 的本服务进程 PID $p"
+      Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+    } else {
+      Write-Host "端口 $Port 由其他程序占用（PID $p），未进行处理。"
+    }
   }
 }
 

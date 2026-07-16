@@ -1,5 +1,7 @@
 # 电商经营数据工具箱内网部署说明
 
+Windows 首次部署建议直接使用一页式清单：[`windows-deployment-quickstart.md`](windows-deployment-quickstart.md)。本文保留完整的跨平台维护说明。
+
 ## 推荐部署方式
 
 第一阶段建议部署在公司内网里一台长期在线的电脑上，由这台电脑运行 Web 服务，其他同事通过浏览器访问：
@@ -38,11 +40,10 @@ python3 -m venv .venv
 Windows PowerShell 执行：
 
 ```powershell
-git clone <your-github-repo-url> 电商经营数据工具箱
-cd 电商经营数据工具箱
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd $HOME\Documents
+git clone https://github.com/XuKeqiang/ops-data-toolbox.git
+cd ops-data-toolbox
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
 ```
 
 复制并调整配置文件。
@@ -106,6 +107,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 
 服务会读取 `config/app-config.json` 中的监听地址和端口。同事可以用服务器电脑的局域网 IP 访问。
 
+首次开放局域网访问时，用管理员 PowerShell 执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure-windows-firewall.ps1
+```
+
 ## 开机自启动和每日备份
 
 macOS 服务器电脑上执行一次：
@@ -127,7 +134,7 @@ macOS 手动备份：
 bash scripts/backup.sh
 ```
 
-Windows 服务器电脑上执行一次：
+Windows 服务器电脑上用管理员 PowerShell 执行一次：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows-task.ps1

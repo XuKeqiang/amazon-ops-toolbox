@@ -3,20 +3,27 @@ $ErrorActionPreference = "Stop"
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RootDir
 
+$VenvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
 $Python = $env:PYTHON
+$PyLauncherVersion = $null
 if (-not $Python) {
-  $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
-  if (-not $PythonCommand) {
-    $PythonCommand = Get-Command py -ErrorAction SilentlyContinue
-    if ($PythonCommand) {
-      $Python = "py -3"
+  if (Test-Path $VenvPython) {
+    $Python = $VenvPython
+  } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+    foreach ($Candidate in @("-3.12", "-3.11")) {
+      & py $Candidate -c "import sys" *> $null
+      if ($LASTEXITCODE -eq 0) {
+        $PyLauncherVersion = $Candidate
+        break
+      }
     }
-  } else {
+  }
+  if (-not $Python -and -not $PyLauncherVersion -and (Get-Command python -ErrorAction SilentlyContinue)) {
     $Python = "python"
   }
 }
 
-if (-not $Python) {
+if (-not $Python -and -not $PyLauncherVersion) {
   Write-Host "未找到 Python。请先安装 Python 3.11 或 3.12，并勾选 Add python.exe to PATH。"
   exit 1
 }
@@ -31,10 +38,10 @@ if version >= (3, 13):
 print("Python", sys.version.split()[0])
 '@
 
-if ($Python -eq "py -3") {
-  py -3 -c $VersionScript
+if ($PyLauncherVersion) {
+  & py $PyLauncherVersion -c $VersionScript
   if (-not (Test-Path ".venv")) {
-    py -3 -m venv .venv
+    & py $PyLauncherVersion -m venv .venv
   }
 } else {
   & $Python -c $VersionScript
@@ -43,7 +50,6 @@ if ($Python -eq "py -3") {
   }
 }
 
-$VenvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
 $MirrorUrl = $env:PIP_INDEX_URL
 if (-not $MirrorUrl) {
   $MirrorUrl = "https://pypi.tuna.tsinghua.edu.cn/simple"

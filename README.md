@@ -12,6 +12,8 @@
 
 下面分别给出 macOS 和 Windows 的部署方式。目标是：选一台公司电脑作为服务器，其他同事通过局域网浏览器访问。
 
+如果今天只部署 Windows，优先按一页式清单操作：[`docs/windows-deployment-quickstart.md`](docs/windows-deployment-quickstart.md)。
+
 ### 1. 准备一台服务器电脑
 
 建议：
@@ -216,6 +218,12 @@ ipconfig
 
 Windows 输出里找当前网络下的 `IPv4 地址`。macOS 如果 `ipconfig getifaddr en0` 没有输出，可以到“系统设置 → 网络”里查看当前网络的 IP 地址。
 
+Windows 首次允许同事从局域网访问时，请用“管理员身份”打开 PowerShell，再执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure-windows-firewall.ps1
+```
+
 ### 8. 停止服务
 
 macOS：
@@ -240,9 +248,16 @@ macOS：
 bash scripts/install-launchd.sh
 ```
 
-Windows PowerShell：
+Windows 普通 PowerShell 先创建桌面快捷方式：
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\create-shortcut.ps1
+```
+
+再用“管理员身份”打开 PowerShell，进入项目目录并安装自动任务：
+
+```powershell
+cd $HOME\Documents\ops-data-toolbox
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows-task.ps1
 ```
 

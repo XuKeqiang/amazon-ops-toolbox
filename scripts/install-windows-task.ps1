@@ -1,5 +1,11 @@
 $ErrorActionPreference = "Stop"
 
+$CurrentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  Write-Host "请右键 PowerShell 选择“以管理员身份运行”，然后重新执行本脚本。"
+  exit 1
+}
+
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $StartScript = Join-Path $RootDir "scripts\start.ps1"
 $BackupScript = Join-Path $RootDir "scripts\backup.ps1"

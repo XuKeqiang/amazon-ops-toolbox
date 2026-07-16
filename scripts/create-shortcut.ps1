@@ -54,7 +54,7 @@ if (`$Ready) {
     [System.Windows.Forms.MessageBox]::Show("服务已启动，浏览器已打开。`nhttp://127.0.0.1:$Port/", "电商经营数据工具箱", "OK", "Information") | Out-Null
 } else {
     [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
-    [System.Windows.Forms.MessageBox]::Show("启动失败，请查看 data\logs\server.log", "电商经营数据工具箱", "OK", "Warning") | Out-Null
+    [System.Windows.Forms.MessageBox]::Show("启动失败，请查看 data\logs\server.err.log", "电商经营数据工具箱", "OK", "Warning") | Out-Null
 }
 "@ | Set-Content -Path $LauncherScript -Encoding UTF8
 

@@ -21,14 +21,23 @@ if (-not $Port -and (Test-Path "config\app-config.json")) {
 }
 if (-not $Port) { $Port = "8080" }
 
-function Free-Port {
+function Stop-ServiceOnPort {
   param($Port)
   $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
   if ($conn) {
     $pids = $conn.OwningProcess | Sort-Object -Unique
-    Write-Host "端口 $Port 被占用，释放进程: $($pids -join ', ')"
     foreach ($p in $pids) {
-      try { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } catch {}
+      $isServer = $false
+      try {
+        $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $p" -ErrorAction SilentlyContinue
+        if ($cim -and ($cim.CommandLine -like "*app.ops_toolbox.server*")) { $isServer = $true }
+      } catch {}
+      if ($isServer) {
+        Write-Host "停止占用端口 $Port 的旧服务进程 PID $p"
+        Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+      } else {
+        throw "端口 $Port 已被其他程序占用（PID $p）。请关闭该程序，或修改 config\app-config.json 中的 server.port。"
+      }
     }
     Start-Sleep -Seconds 1
   }
@@ -44,7 +53,7 @@ function Stop-ByPidFile {
         try {
           $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $pidText" -ErrorAction SilentlyContinue
           if ($cim -and ($cim.CommandLine -like "*app.ops_toolbox.server*")) { $isServer = $true }
-        } catch { $isServer = $true }  # 无法确认时按服务器处理，保证可停
+        } catch { $isServer = $false }
         if ($isServer) {
           Write-Host "停止已记录进程 PID $pidText"
           Stop-Process -Id $pidText -Force -ErrorAction SilentlyContinue
@@ -58,9 +67,9 @@ function Stop-ByPidFile {
   }
 }
 
-# ---- 兜底清理：先停 pid 文件进程，再按端口释放任何占用者 ----
+# ---- 兜底清理：只停止本服务进程；其他程序占用端口时明确报错 ----
 Stop-ByPidFile
-Free-Port -Port $Port
+Stop-ServiceOnPort -Port $Port
 
 # ---- 环境检查 ----
 $VenvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
