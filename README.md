@@ -41,7 +41,16 @@ python --version
 
 - Git：可以安装 Xcode Command Line Tools，终端里执行 `xcode-select --install`。
 - Windows Git：安装 [Git for Windows](https://git-scm.com/download/win)。
-- Python：建议安装 Python 3.11 或 3.12。Windows 安装时勾选 “Add python.exe to PATH”。
+- Windows Python：推荐安装 [Python 3.12.10 64 位版](https://www.python.org/downloads/release/python-31210/)，安装时必须勾选 “Add python.exe to PATH”。
+
+Windows 10/11 也可以直接用普通 PowerShell 安装：
+
+```powershell
+winget install --id Git.Git -e --source winget
+winget install --id Python.Python.3.12 -e --source winget
+```
+
+详细的下载选择、国内网络和离线安装准备见 [`docs/windows-deployment-quickstart.md`](docs/windows-deployment-quickstart.md)。
 
 ### 3. 拉取项目代码
 

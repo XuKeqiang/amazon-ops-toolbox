@@ -4,7 +4,40 @@
 
 ## 1. 准备软件
 
-安装 Git for Windows，以及 Python 3.11 或 3.12。安装 Python 时勾选 `Add python.exe to PATH`。
+需要安装 Git for Windows 和 64 位 Python 3.12。推荐按下面的优先顺序安装。
+
+### 方法 A：使用 winget（最省事）
+
+Windows 10/11 如果可以运行 `winget --version`，在普通 PowerShell 执行：
+
+```powershell
+winget install --id Git.Git -e --source winget
+winget install --id Python.Python.3.12 -e --source winget
+```
+
+安装结束后关闭 PowerShell，再重新打开一个 PowerShell 窗口。
+
+### 方法 B：下载安装包
+
+- Git：[Git for Windows 官方下载页](https://git-scm.com/install/windows.html)，选择最新的 x64 安装包，安装过程保持默认选项。
+- Python：[Python 3.12.10 官方下载页](https://www.python.org/downloads/release/python-31210/)，在页面底部选择 `Windows installer (64-bit)`。
+
+安装 Python 时必须勾选首页底部的 `Add python.exe to PATH`，然后选择 `Install Now`。不要下载 `embeddable package`、源码包、32 位或 ARM64 安装包。
+
+Python 3.12.10 是 Python 3.12 系列最后一个提供传统 Windows 安装器的完整维护版本；不要为了“最新版”改装 Python 3.13 或 3.14。
+
+### 国内网络准备
+
+- 出发前建议把 Git x64 和 Python 3.12.10 x64 两个安装包放入 U 盘或公司共享盘，现场网络不稳定时可离线安装。
+- 项目的 Python 依赖安装脚本默认使用清华 PyPI 镜像，不需要手动设置。
+- 如果清华镜像不可用，可在运行安装脚本前切换阿里云镜像：
+
+```powershell
+$env:PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cn.ps1
+```
+
+- GitHub 无法访问时，不要使用来源不明的加速网址。应切换可信网络或使用公司批准的代理；后续网页自动更新同样需要访问 GitHub。
 
 普通 PowerShell 中确认：
 
@@ -12,6 +45,8 @@
 git --version
 python --version
 ```
+
+Python 应显示 `3.11.x` 或 `3.12.x`。如果命令仍提示找不到，先关闭 PowerShell 并重新打开；仍无效时重新运行 Python 安装程序，确认已经勾选 PATH。
 
 ## 2. 下载并安装
 
