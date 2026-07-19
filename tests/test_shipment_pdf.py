@@ -207,6 +207,51 @@ class ShipmentPdfParsingTest(unittest.TestCase):
         self.assertTrue(any("SKU不一致" in n for n in record.comparison_notes))
         self.assertFalse(record.is_valid)
 
+    def test_parse_label_text_falls_back_warehouse_and_fba_to_filename(self):
+        # PDF 文本能识别 SKU/国家/产品，但读不到仓库与 FBA 物流编码；
+        # 文件名权威含 BHX4 / FBA15M107PW1，应回退而不误报。
+        source_path = Path(
+            "华越_120341_瑞思收纳架-英国_1箱_1个_BHX4_FBA15M107PW1（9-28）_欧洲.pdf"
+        )
+        page_texts = [
+            "120341\n"
+            "数量 1\n"
+            "瑞思收纳架\n"
+            "Single SKU\n"
+            "请不要遮住此标签\n"
+        ]
+
+        record = parse_label_text(source_path=source_path, page_texts=page_texts)
+
+        self.assertEqual(record.warehouse, "BHX4")
+        self.assertEqual(record.fba_code, "FBA15M107PW1")
+        self.assertEqual(record.notes, ())
+        self.assertTrue(record.is_valid)
+
+    def test_loose_warehouse_fallback_does_not_cause_false_mismatch(self):
+        # PDF 中 'MADE IN CHINA' 会被宽松回退正则误识为仓库，但文件名权威为 BHX4。
+        # 应优先采用文件名且不产生虚假「仓库不一致」。
+        source_path = Path(
+            "华越_120341_瑞思收纳架-英国_1箱_1个_BHX4_FBA15M107PW1（9-28）_欧洲.pdf"
+        )
+        page_texts = [
+            "120341\n"
+            "MADE IN CHINA\n"
+            "数量 1\n"
+            "瑞思收纳架\n"
+            "Single SKU\n"
+            "请不要遮住此标签\n"
+            "FBA15M107PW1U000001\n"
+        ]
+
+        record = parse_label_text(source_path=source_path, page_texts=page_texts)
+
+        self.assertEqual(record.warehouse, "BHX4")
+        self.assertEqual(record.fba_code, "FBA15M107PW1")
+        self.assertEqual(record.notes, ())
+        self.assertEqual(record.comparison_notes, ())
+        self.assertTrue(record.is_valid)
+
     def test_parse_forwarder_filename_info(self):
         info = parse_filename_info("沙特-FASA202605228410S（1-20）晟通.pdf")
 

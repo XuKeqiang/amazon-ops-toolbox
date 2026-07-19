@@ -108,8 +108,11 @@ def parse_label_text(source_path: Path, page_texts: list[str] | tuple[str, ...])
     quantity_per_box = _extract_quantity_per_box(first_page_text)
     label_title, title_product_name, title_warehouse, created_at = _extract_label_title(first_page_text, pdf_sku)
     pdf_country = _extract_country(all_text)
-    warehouse = title_warehouse or _extract_warehouse(all_text)
-    fba_code = carton_codes[0][:12] if carton_codes else ""
+    pdf_warehouse, warehouse_reliable = _extract_warehouse(all_text)
+    pdf_warehouse = title_warehouse or pdf_warehouse
+    if title_warehouse:
+        warehouse_reliable = True
+    pdf_fba_code = carton_codes[0][:12] if carton_codes else ""
     box_count = len(page_texts)
     total_units = quantity_per_box * box_count if quantity_per_box is not None else None
     claimed_total = _extract_claimed_total(all_text)
@@ -120,6 +123,10 @@ def parse_label_text(source_path: Path, page_texts: list[str] | tuple[str, ...])
     # 文件名值在比较阶段不参与「不一致」判定：compare_filename_info 仍使用原始 PDF 值。
     sku = pdf_sku or filename_info.sku
     destination_country = pdf_country or filename_info.country
+    # 仓库 / FBA 物流编码同样回退到文件名权威值。
+    # PDF 仓库若仅来自宽松回退正则（不可靠），则优先采用文件名，避免被无关大写词（如 MADE）污染。
+    warehouse = (pdf_warehouse if warehouse_reliable else "") or filename_info.warehouse
+    fba_code = pdf_fba_code or filename_info.fba_code
 
     is_single_sku = pdf_has_single_sku
     if not is_single_sku:
@@ -148,8 +155,9 @@ def parse_label_text(source_path: Path, page_texts: list[str] | tuple[str, ...])
         filename_info=filename_info,
         pdf_sku=pdf_sku,
         pdf_country=pdf_country,
-        pdf_warehouse=warehouse,
-        pdf_fba_code=fba_code,
+        pdf_warehouse=pdf_warehouse,
+        pdf_warehouse_reliable=warehouse_reliable,
+        pdf_fba_code=pdf_fba_code,
         pdf_box_count=box_count,
         pdf_total_units=total_units,
     )
@@ -476,11 +484,15 @@ def compare_filename_info(
     pdf_fba_code: str,
     pdf_box_count: int,
     pdf_total_units: int | None,
+    pdf_warehouse_reliable: bool = True,
 ) -> list[str]:
     notes: list[str] = []
     _compare_text(notes, "SKU", filename_info.sku, pdf_sku)
     _compare_text(notes, "国家", filename_info.country, _normalize_country(pdf_country))
-    _compare_text(notes, "仓库", filename_info.warehouse, pdf_warehouse)
+    # 仅当 PDF 仓库来自可靠来源时才参与「不一致」判定；
+    # 宽松回退正则命中的值不可信，可能产生虚假「仓库不一致」。
+    if pdf_warehouse_reliable:
+        _compare_text(notes, "仓库", filename_info.warehouse, pdf_warehouse)
     _compare_text(notes, "FBA编码", filename_info.fba_code, pdf_fba_code)
     if filename_info.box_count is not None and filename_info.box_count != pdf_box_count:
         notes.append(f"箱数不一致：文件名 {filename_info.box_count} / PDF {pdf_box_count}")
@@ -564,15 +576,20 @@ def _extract_country(text: str) -> str:
     return ""
 
 
-def _extract_warehouse(text: str) -> str:
+def _extract_warehouse(text: str) -> tuple[str, bool]:
+    """返回 (仓库码, 是否可靠)。
+
+    可靠 = 来自标题/「-仓库 Created:」规范行；不可靠 = 仅由宽松回退正则
+    (WAREHOUSE_FALLBACK_RE) 兜底命中，可能与正文无关（如 'MADE IN CHINA' 中的 MADE）。
+    """
     match = WAREHOUSE_RE.search(text)
     if match:
-        return match.group(2)
+        return match.group(2), True
 
     for candidate in WAREHOUSE_FALLBACK_RE.findall(text):
         if candidate not in {"FBA", "SKU"}:
-            return candidate
-    return ""
+            return candidate, False
+    return "", False
 
 
 def _extract_label_title(first_page_text: str, sku: str) -> tuple[str, str, str, str]:
