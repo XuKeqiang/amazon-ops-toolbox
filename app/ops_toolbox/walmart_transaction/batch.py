@@ -371,6 +371,14 @@ def _parse_walmart_workbook(path: Path, root: Path, unmapped: dict[str, Counter]
         notes.append("未找到有效账单明细工作表")
     if source_rows != len(rows):
         notes.append(f"源行数 {source_rows} / 解析行数 {len(rows)} 不一致")
+
+    # 文件名未带账期时，回退到内容中交易日期推断账期，避免误报「文件名未识别来源账期」。
+    # 仅当文件名确实缺账期、且内容能推断出时才采用（文件名账期优先级更高）。
+    content_period = _content_period_label(parsed_dates)
+    if not source_period and content_period:
+        source_period = content_period
+        for row in rows:
+            row[0] = source_period  # Source Period 为 EN_HEADERS 第 0 列
     if not source_period:
         notes.append("文件名未识别来源账期")
 
@@ -577,6 +585,15 @@ def _looks_like_walmart_header(headers: list[str]) -> bool:
 def _source_period_from_filename(filename: str) -> str:
     match = re.search(r"(20\d{6})[-_－—](20\d{6})", filename)
     return f"{match.group(1)}-{match.group(2)}" if match else ""
+
+
+def _content_period_label(dates: list[datetime]) -> str:
+    """由交易日期推断来源账期标签（YYYYMMDD-YYYYMMDD）。无日期时返回空串。"""
+    if not dates:
+        return ""
+    lo = min(dates)
+    hi = max(dates)
+    return f"{lo.strftime('%Y%m%d')}-{hi.strftime('%Y%m%d')}"
 
 
 def _output_period_label(rows: list[list[Any]], fallback: str) -> str:

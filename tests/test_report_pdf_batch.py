@@ -100,6 +100,36 @@ class ReportPdfBatchTest(TestCase):
 
         self.assertEqual(rows[0][1], "Bikoney")
 
+    def test_result_row_does_not_flag_store_review_when_pdf_lacks_display_name(self) -> None:
+        # PDF 未解析到 Display name、已回退用文件名时，不应误报「店铺需复核」。
+        result = {
+            "meta": {
+                "store": "Bikoney",
+                "country": "美国",
+                "country_code": "US",
+                "source_file": "202605-Bikoney-美国-汇总报告.pdf",
+                "source_path": "/tmp/202605-Bikoney-美国-汇总报告.pdf",
+                "currency": "USD",
+                "period": "May 1, 2026 ~ May 31, 2026",
+                "year": 2026,
+                "month": 5,
+                "quarter": "Q2",
+                "filename_audit_status": "✓ 文件名年月与报告期一致",
+                "store_audit_status": "✓ 未从 PDF 正文解析到 Display name，已采用文件名/目录",
+                "country_audit_status": "✓ 国家与 PDF 货币/时区推断一致：美国(US)",
+            },
+            "summaries": [{}, {}],
+            "details": [{}, {}],
+            "checks": [{}, {}],
+            "errors": [],
+        }
+
+        row = _result_row(result, {})
+
+        self.assertEqual(row["status"], "通过")
+        self.assertNotIn("店铺需复核", row["status"])
+        self.assertNotIn("未从 PDF 正文解析到 Display name", row["notes"])
+
     def test_store_initial_mismatch_warns_when_filename_and_pdf_initial_differ(self) -> None:
         warning = _store_initial_mismatch("VINAEMO", "Keebofly")
 

@@ -1170,7 +1170,9 @@ def extract_pdf(pdf_path, store, country, country_code=None):
         else:
             meta["store_audit_status"] = "✓ 文件名/目录店铺与 PDF Display name 首字母一致"
     else:
-        meta["store_audit_status"] = "未从 PDF 正文解析到 Display name，已采用文件名/目录"
+        # PDF 未提供 Display name，已按既定规则回退使用文件名/目录店铺。
+        # 这是预期回退（非不一致），不应触发「店铺需复核」，故以 ✓ 前缀标记为中性状态。
+        meta["store_audit_status"] = "✓ 未从 PDF 正文解析到 Display name，已采用文件名/目录"
 
     pdf_country_code = infer_pdf_country_code(meta["currency"], meta["period"])
     meta["pdf_country_code"] = pdf_country_code
